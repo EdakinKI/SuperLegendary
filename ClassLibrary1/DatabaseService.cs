@@ -81,17 +81,18 @@ namespace WindowsFormsApp1.Services
         }
 
         // 3. Работа с наборами параметров прогноза
-        public int CreateForecastParamSet(string nameSetId, int systemId, DateTime dateStart, DateTime? dateEnd = null)
+        public int CreateForecastParamSet(string nameSetId, int systemId, int tableTypeId, DateTime dateStart, DateTime? dateEnd = null)
         {
             var sql = @"
-                INSERT INTO forecast_param_sets (name_set_id, system_id, date_start, date_end) 
-                VALUES (@NameSetId, @SystemId, @DateStart, @DateEnd)
-                RETURNING param_set_id";
+        INSERT INTO forecast_param_sets (name_set_id, system_id, table_type_id, date_start, date_end) 
+        VALUES (@NameSetId, @SystemId, @TableTypeId, @DateStart, @DateEnd)
+        RETURNING param_set_id";
 
             return ExecuteScalar<int>(sql, new
             {
                 NameSetId = nameSetId,
                 SystemId = systemId,
+                TableTypeId = tableTypeId,
                 DateStart = dateStart,
                 DateEnd = dateEnd
             });
@@ -176,20 +177,60 @@ namespace WindowsFormsApp1.Services
         // 6. Сохранение расчетов статических зависимостей
         public int SaveStaticCalculation(StaticCalculationDb calculation, bool askConfirmation = true)
         {
-            if (askConfirmation)
+            try
             {
-                // Проверка подтверждения будет выполнена в вызывающем коде
                 var sql = @"
-                    INSERT INTO calculations_static 
-                    (type_id, calculation_name, calculation_date, 
-                     k_linear, b_linear, l_exponential) 
-                    VALUES (@TypeId, @CalculationName, @CalculationDate,
-                            @KLinear, @BLinear, @LExponential)
-                    RETURNING static_id";
+            INSERT INTO calculations_static 
+            (type_id, calculation_name, calculation_date, 
+             k_linear, b_linear, l_exponential) 
+            VALUES (@TypeId, @CalculationName, @CalculationDate,
+                    @KLinear, @BLinear, @LExponential)
+            RETURNING static_id";
+
+                // Убедимся, что все поля заполнены
+                if (string.IsNullOrEmpty(calculation.CalculationName))
+                {
+                    calculation.CalculationName = $"Статический анализ {DateTime.Now:dd.MM.yyyy HH:mm}";
+                }
+
+                if (calculation.CalculationDate == default)
+                {
+                    calculation.CalculationDate = DateTime.Now;
+                }
 
                 return ExecuteScalar<int>(sql, calculation);
             }
-            return 0;
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка сохранения статического расчета: {ex.Message}");
+                throw;
+            }
+        }
+
+        public int GetOrCreateTableType(string tableTypeName)
+        {
+            var sql = @"
+        INSERT INTO table_types (table_type_name) 
+        VALUES (@TableTypeName) 
+        ON CONFLICT (table_type_name) DO UPDATE SET table_type_name = EXCLUDED.table_type_name
+        RETURNING table_type_id";
+
+            return ExecuteScalar<int>(sql, new { TableTypeName = tableTypeName });
+        }
+
+        // 10. Получение ID табличного типа по имени
+        public int? GetTableTypeId(string tableTypeName)
+        {
+            var sql = "SELECT table_type_id FROM table_types WHERE table_type_name = @TableTypeName";
+
+            try
+            {
+                return ExecuteScalar<int?>(sql, new { TableTypeName = tableTypeName });
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         // 7. Получение данных для расчета прогноза

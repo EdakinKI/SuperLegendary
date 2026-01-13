@@ -13,13 +13,41 @@ namespace WindowsFormsApp1
         private DatabaseService _dbService = new DatabaseService();
         private ForecastParamsDb _selectedParams;
         private List<EnergySystem> _energySystems = new List<EnergySystem>();
+        private Panel contentPanel;
 
         public InitialFormDb()
         {
             InitializeComponent();
+            CreateContentPanel();
             ConfigureForm();
             InitializeEventHandlers();
             LoadDataFromDatabase();
+        }
+
+        private void CreateContentPanel()
+        {
+            // Создаем панель для содержимого с прокруткой
+            contentPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                Padding = new Padding(10)
+            };
+
+            // Перемещаем все существующие контролы на панель
+            var controls = new List<Control>();
+            foreach (Control control in this.Controls)
+            {
+                controls.Add(control);
+            }
+
+            this.Controls.Clear();
+            this.Controls.Add(contentPanel);
+
+            foreach (var control in controls)
+            {
+                contentPanel.Controls.Add(control);
+            }
         }
 
         private void ConfigureForm()
@@ -28,10 +56,66 @@ namespace WindowsFormsApp1
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
-            this.Size = new Size(1000, 700);
+            this.Size = new Size(600, 800);
 
             // Изначально скрываем таблицы
             gbPowerRanges.Visible = false;
+            gbEnergyRanges.Visible = false;
+
+            // Позиционируем элементы
+            int currentY = 10;
+
+            // Первая строка: тип расчета
+            lblCalculationType.Location = new Point(10, currentY);
+            cmbCalculationType.Location = new Point(150, currentY - 3);
+            currentY += 35;
+
+            // Вторая строка: энергосистема
+            lblSystem.Location = new Point(10, currentY);
+            cmbSystems.Location = new Point(150, currentY - 3);
+            currentY += 35;
+
+            // Третья строка: таблица коэффициентов
+            lblParamSet.Location = new Point(10, currentY);
+            cmbParamSets.Location = new Point(150, currentY - 3);
+            currentY += 40;
+
+            // Четвертая строка: температуры
+            lblT1.Location = new Point(10, currentY);
+            txtT1.Location = new Point(70, currentY - 3);
+            txtT1.Size = new Size(80, 22);
+
+            lblT2.Location = new Point(170, currentY);
+            txtT2.Location = new Point(230, currentY - 3);
+            txtT2.Size = new Size(80, 22);
+            currentY += 35;
+
+            // Пятая строка: мощность и электроэнергия
+            lblP1.Location = new Point(10, currentY);
+            txtP1.Location = new Point(80, currentY - 3);
+            txtP1.Size = new Size(100, 22);
+
+            lblE1.Location = new Point(200, currentY);
+            txtE1.Location = new Point(310, currentY - 3);
+            txtE1.Size = new Size(100, 22);
+            currentY += 35;
+
+            // Шестая строка: дата прогноза и кнопка расчета
+            lblForecastDate.Location = new Point(10, currentY);
+            dtpForecastDate.Location = new Point(140, currentY - 3);
+            dtpForecastDate.Size = new Size(150, 22);
+
+            btnCalculate.Location = new Point(310, currentY - 3);
+            btnCalculate.Size = new Size(120, 30);
+            currentY += 40;
+
+            // Позиционируем таблицы ниже (изначально скрыты)
+            gbPowerRanges.Location = new Point(10, currentY);
+            gbPowerRanges.Size = new Size(560, 180);
+            gbPowerRanges.Visible = false;
+
+            gbEnergyRanges.Location = new Point(10, currentY + 190);
+            gbEnergyRanges.Size = new Size(560, 180);
             gbEnergyRanges.Visible = false;
         }
 
@@ -254,19 +338,48 @@ namespace WindowsFormsApp1
 
             string selectedType = cmbCalculationType.SelectedItem?.ToString();
 
+            // Скрываем все таблицы сначала
+            gbPowerRanges.Visible = false;
+            gbEnergyRanges.Visible = false;
+
+            int currentY = btnCalculate.Location.Y + btnCalculate.Height + 20;
+
             if (selectedType == "По электроэнергии" || selectedType == "По мощности и электроэнергии")
             {
                 DisplayRangesInGrid(_energySystems.FirstOrDefault(), dgvEnergyRanges, "Электроэнергия");
                 gbEnergyRanges.Visible = true;
-                gbEnergyRanges.Location = new Point(0, 0);
+                gbEnergyRanges.Location = new Point(10, currentY);
+                gbEnergyRanges.Text = "Коэффициенты влияния для ЭЛЕКТРОЭНЕРГИИ";
+                currentY += gbEnergyRanges.Height + 10;
             }
 
             if (selectedType == "По мощности" || selectedType == "По мощности и электроэнергии")
             {
                 DisplayRangesInGrid(_energySystems.FirstOrDefault(), dgvPowerRanges, "Мощность");
                 gbPowerRanges.Visible = true;
-                gbPowerRanges.Location = selectedType == "По мощности и электроэнергии" ?
-                    new Point(0, 250) : new Point(0, 0);
+
+                // Если уже есть таблица для электроэнергии, позиционируем ниже
+                if (gbEnergyRanges.Visible)
+                {
+                    gbPowerRanges.Location = new Point(10, gbEnergyRanges.Location.Y + gbEnergyRanges.Height + 10);
+                }
+                else
+                {
+                    gbPowerRanges.Location = new Point(10, currentY);
+                }
+
+                gbPowerRanges.Text = "Коэффициенты влияния для МОЩНОСТИ";
+            }
+
+            // Обеспечиваем прокрутку
+            if (contentPanel != null)
+            {
+                int totalHeight = Math.Max(
+                    gbPowerRanges.Visible ? gbPowerRanges.Location.Y + gbPowerRanges.Height : 0,
+                    gbEnergyRanges.Visible ? gbEnergyRanges.Location.Y + gbEnergyRanges.Height : 0
+                );
+
+                contentPanel.AutoScrollMinSize = new Size(0, totalHeight + 50);
             }
         }
 
@@ -457,36 +570,165 @@ namespace WindowsFormsApp1
             }
         }
 
-        // Остальные методы (Calculate, ValidateInput, FindRangeIndex, NumericTextBox_KeyPress)
-        // остаются такими же, как в оригинальном InitialForm
-        // ...
+        private bool ValidateInput()
+        {
+            if (cmbSystems.SelectedItem == null || cmbCalculationType.SelectedItem == null)
+                return false;
+
+            if (string.IsNullOrEmpty(txtT1.Text) || string.IsNullOrEmpty(txtT2.Text))
+                return false;
+
+            if (!double.TryParse(txtT1.Text, out _) || !double.TryParse(txtT2.Text, out _))
+                return false;
+
+            string calculationType = cmbCalculationType.SelectedItem.ToString();
+
+            if (calculationType == "По электроэнергии")
+            {
+                if (string.IsNullOrEmpty(txtE1.Text) || !double.TryParse(txtE1.Text, out _))
+                    return false;
+            }
+            else if (calculationType == "По мощности")
+            {
+                if (string.IsNullOrEmpty(txtP1.Text) || !double.TryParse(txtP1.Text, out _))
+                    return false;
+            }
+            else if (calculationType == "По мощности и электроэнергии")
+            {
+                if (string.IsNullOrEmpty(txtP1.Text) || !double.TryParse(txtP1.Text, out _) ||
+                    string.IsNullOrEmpty(txtE1.Text) || !double.TryParse(txtE1.Text, out _))
+                    return false;
+            }
+
+            if (dtpForecastDate.Value < new DateTime(2000, 1, 1))
+            {
+                MessageBox.Show("Пожалуйста, выберите корректную дату.", "Предупреждение",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            return true;
+        }
 
         private (double FinalValue, List<(double Value, string Description)> IntermediateResults)
             Calculate(double initialValue, double t1, double t2, List<TemperatureRange> ranges, string calculationType)
         {
-            // Реализация метода Calculate из оригинального InitialForm
-            // ...
-            return (initialValue, new List<(double, string)>());
-        }
+            List<(double Value, string Description)> intermediateResults = new List<(double, string)>();
+            double currentValue = initialValue;
+            double currentTemp = t1;
 
-        private bool ValidateInput()
-        {
-            // Реализация метода ValidateInput из оригинального InitialForm
-            // ...
-            return true;
+            var sortedRanges = ranges.OrderBy(r => r.From).ToList();
+            bool movingToWarmer = t2 > t1;
+
+            int startIndex = FindRangeIndex(sortedRanges, t1, movingToWarmer);
+            if (startIndex == -1) return (initialValue, intermediateResults);
+
+            string unit = calculationType == "Электроэнергия" ? "млн кВт·ч" : "МВт";
+            string prefix = calculationType == "Электроэнергия" ? "E" : "P";
+
+            intermediateResults.Add((currentValue,
+                $"Начальное значение: {prefix}1 = {initialValue} {unit} при T={t1}°C"));
+
+            int step = 1;
+
+            if (movingToWarmer)
+            {
+                for (int i = startIndex; i < sortedRanges.Count; i++)
+                {
+                    var currentRange = sortedRanges[i];
+                    double targetTemp = Math.Min(currentRange.To, t2);
+                    double deltaTemp = targetTemp - currentTemp;
+                    double exponent = (currentRange.Coefficient / 100.0) * deltaTemp;
+                    currentValue = currentValue * Math.Exp(exponent);
+                    currentTemp = targetTemp;
+
+                    intermediateResults.Add((
+                        Math.Round(currentValue, 2),
+                        $"Шаг {step}: {prefix} = {Math.Round(currentValue, 2)} {unit} при T={targetTemp}°C " +
+                        $"(k={currentRange.Coefficient}, ΔT={deltaTemp:F1}°C)"
+                    ));
+
+                    step++;
+                    if (Math.Abs(currentTemp - t2) < 0.001) break;
+                }
+            }
+            else
+            {
+                for (int i = startIndex; i >= 0; i--)
+                {
+                    var currentRange = sortedRanges[i];
+                    double targetTemp = Math.Max(currentRange.From, t2);
+                    double deltaTemp = targetTemp - currentTemp;
+                    double exponent = (currentRange.Coefficient / 100.0) * deltaTemp;
+                    currentValue = currentValue * Math.Exp(exponent);
+                    currentTemp = targetTemp;
+
+                    intermediateResults.Add((
+                        Math.Round(currentValue, 2),
+                        $"Шаг {step}: {prefix} = {Math.Round(currentValue, 2)} {unit} при T={targetTemp}°C " +
+                        $"(k={currentRange.Coefficient}, ΔT={deltaTemp:F1}°C)"
+                    ));
+
+                    step++;
+                    if (Math.Abs(currentTemp - t2) < 0.001) break;
+                }
+            }
+
+            return (Math.Round(currentValue, 2), intermediateResults);
         }
 
         private int FindRangeIndex(List<TemperatureRange> ranges, double temperature, bool movingToWarmer)
         {
-            // Реализация метода FindRangeIndex из оригинального InitialForm
-            // ...
-            return 0;
+            for (int i = 0; i < ranges.Count; i++)
+            {
+                if (temperature >= ranges[i].From && temperature <= ranges[i].To)
+                    return i;
+            }
+
+            if (temperature < ranges.First().From)
+                return 0;
+            else if (temperature > ranges.Last().To)
+                return ranges.Count - 1;
+            else
+            {
+                for (int i = 0; i < ranges.Count - 1; i++)
+                {
+                    if (temperature > ranges[i].To && temperature < ranges[i + 1].From)
+                        return movingToWarmer ? i + 1 : i;
+                }
+            }
+
+            return -1;
         }
 
         private void NumericTextBox_KeyPress(object sender, KeyPressEventArgs e)
         {
-            // Реализация метода NumericTextBox_KeyPress из оригинального InitialForm
-            // ...
+            TextBox textBox = sender as TextBox;
+
+            if (!char.IsControl(e.KeyChar) && !char.IsDigit(e.KeyChar) &&
+                e.KeyChar != '-' && e.KeyChar != '.' && e.KeyChar != ',')
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyChar == '-' && textBox.Text.IndexOf('-') > -1)
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if ((e.KeyChar == '.' || e.KeyChar == ',') &&
+                (textBox.Text.IndexOf('.') > -1 || textBox.Text.IndexOf(',') > -1))
+            {
+                e.Handled = true;
+                return;
+            }
+
+            if (e.KeyChar == '-' && textBox.SelectionStart != 0)
+            {
+                e.Handled = true;
+            }
         }
     }
 }

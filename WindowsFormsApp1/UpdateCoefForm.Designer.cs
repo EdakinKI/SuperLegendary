@@ -93,15 +93,6 @@
             this.lblSystem.TabIndex = 5;
             this.lblSystem.Text = "Энергосистема:";
 
-            // cmbSystems
-            this.cmbSystems.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
-            this.cmbSystems.FormattingEnabled = true;
-            this.cmbSystems.Location = new System.Drawing.Point(127, 107);
-            this.cmbSystems.Name = "cmbSystems";
-            this.cmbSystems.Size = new System.Drawing.Size(200, 24);
-            this.cmbSystems.TabIndex = 6;
-            this.cmbSystems.SelectedIndexChanged += new System.EventHandler(this.cmbSystems_SelectedIndexChanged);
-
             // lblSetName
             this.lblSetName.AutoSize = true;
             this.lblSetName.Location = new System.Drawing.Point(12, 140);

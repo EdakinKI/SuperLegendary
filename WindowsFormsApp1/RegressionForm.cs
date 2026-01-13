@@ -37,25 +37,45 @@ namespace WindowsFormsApp1
 
         private void AddSaveButton()
         {
+            // Создаем панель для кнопок
+            var buttonPanel = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 50,
+                BackColor = SystemColors.Control
+            };
+
+            // Кнопка сохранения
             btnSaveToDb = new Button
             {
                 Text = "Сохранить в БД",
-                Location = new Point(1150, 20),
-                Size = new Size(130, 35),
+                Size = new Size(150, 35),
+                Location = new Point(this.Width - 320, 10),
                 BackColor = Color.LightGreen,
-                Font = new Font("Arial", 9, FontStyle.Bold),
-                Anchor = AnchorStyles.Top | AnchorStyles.Right
+                Font = new Font("Arial", 9, FontStyle.Bold)
             };
 
             btnSaveToDb.Click += BtnSaveToDb_Click;
-            this.Controls.Add(btnSaveToDb);
-            btnSaveToDb.BringToFront();
+
+            // Кнопка закрытия
+            var btnClose = new Button
+            {
+                Text = "Закрыть",
+                Size = new Size(150, 35),
+                Location = new Point(this.Width - 160, 10)
+            };
+            btnClose.Click += (s, e) => this.Close();
+
+            buttonPanel.Controls.Add(btnSaveToDb);
+            buttonPanel.Controls.Add(btnClose);
+            this.Controls.Add(buttonPanel);
         }
 
         private void BtnSaveToDb_Click(object sender, EventArgs e)
         {
             var dialogResult = MessageBox.Show(
-                "Сохранить результаты статического анализа в базу данных?",
+                "Сохранить результаты статического анализа в базу данных?\n\n" +
+                "Будут сохранены коэффициенты линейной и экспоненциальной регрессии для всех периодов.",
                 "Подтверждение сохранения",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
@@ -70,24 +90,33 @@ namespace WindowsFormsApp1
                 int savedCount = 0;
                 int totalCount = regressionResults.Count;
 
+                // Показываем прогресс
+                var progressForm = new ProcessingForm();
+                progressForm.Show();
+                progressForm.UpdateProgress("Начинаю сохранение...", 0);
+
                 foreach (var result in regressionResults)
                 {
                     try
                     {
+                        // Обновляем прогресс
+                        int progress = (savedCount * 100) / Math.Max(1, totalCount);
+                        progressForm.UpdateProgress($"Сохранение периода: {result.PeriodName}...", progress);
+
                         // Получаем ID типа расчета
-                        int typeId = _dbService.GetOrCreateCalculationType("Построение статических зависимостей");
+                        int typeId = _dbService.GetOrCreateCalculationType("Расчет статических зависимостей");
 
                         var staticCalc = new StaticCalculationDb
                         {
                             TypeId = typeId,
                             CalculationName = $"{result.PeriodName} - статический анализ",
-                            CalculationDate = DateTime.Now,
+                            CalculationDate = DateTime.Now, // ← ВАЖНО: добавляем дату!
                             KLinear = result.LinearSlope,
                             BLinear = result.LinearIntercept,
                             LExponential = result.ExponentialIntensity
                         };
 
-                        // Сохраняем в БД с подтверждением (askConfirmation = false, т.к. уже спросили)
+                        // Сохраняем в БД
                         int staticId = _dbService.SaveStaticCalculation(staticCalc, askConfirmation: false);
 
                         if (staticId > 0)
@@ -95,30 +124,51 @@ namespace WindowsFormsApp1
                             savedCount++;
                             System.Diagnostics.Debug.WriteLine($"Сохранен статический анализ: {result.PeriodName}, ID: {staticId}");
                         }
+
+                        // Небольшая задержка для отображения прогресса
+                        System.Threading.Thread.Sleep(50);
                     }
                     catch (Exception ex)
                     {
                         System.Diagnostics.Debug.WriteLine($"Ошибка сохранения периода '{result.PeriodName}': {ex.Message}");
+                        // Продолжаем сохранение других периодов
                     }
                 }
 
-                MessageBox.Show(
-                    $"Сохранено {savedCount} из {totalCount} результатов статического анализа.",
-                    savedCount > 0 ? "Успешно" : "Информация",
-                    MessageBoxButtons.OK,
-                    savedCount > 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+                progressForm.UpdateProgress("Сохранение завершено!", 100);
+                System.Threading.Thread.Sleep(500);
+                progressForm.Close();
 
-                // После сохранения делаем кнопку неактивной
-                if (btnSaveToDb != null)
+                if (savedCount > 0)
                 {
-                    btnSaveToDb.Enabled = false;
-                    btnSaveToDb.BackColor = Color.LightGray;
-                    btnSaveToDb.Text = "Уже сохранено";
+                    MessageBox.Show(
+                        $"Успешно сохранено {savedCount} из {totalCount} результатов статического анализа.\n\n" +
+                        $"Данные сохранены в таблицу calculations_static.",
+                        "Успешно",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+
+                    // После успешного сохранения обновляем кнопку
+                    if (btnSaveToDb != null)
+                    {
+                        btnSaveToDb.Enabled = false;
+                        btnSaveToDb.BackColor = Color.LightGray;
+                        btnSaveToDb.Text = "✓ Уже сохранено";
+                        btnSaveToDb.Font = new Font(btnSaveToDb.Font, FontStyle.Bold);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show(
+                        "Не удалось сохранить ни один результат.\nПроверьте подключение к базе данных.",
+                        "Ошибка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Ошибка при сохранении в БД:\n\n{ex.Message}",
+                MessageBox.Show($"Критическая ошибка при сохранении в БД:\n\n{ex.Message}",
                     "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

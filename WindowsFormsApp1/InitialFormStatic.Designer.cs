@@ -4,6 +4,11 @@
     {
         private System.ComponentModel.IContainer components = null;
 
+        // Измените названия контролов для ясности
+        private System.Windows.Forms.Label lblCutoffRatio;
+        private System.Windows.Forms.NumericUpDown numCutoffRatio;
+        private System.Windows.Forms.Label lblFourierPeriodType;
+        private System.Windows.Forms.ComboBox cmbFourierPeriodType;
         private System.Windows.Forms.TabControl tabControl;
         private System.Windows.Forms.TabPage tabPageInput;
         private System.Windows.Forms.TabPage tabPageAnalysis;
@@ -32,6 +37,10 @@
         private void InitializeComponent()
         {
 
+            this.lblCutoffRatio = new System.Windows.Forms.Label();
+            this.numCutoffRatio = new System.Windows.Forms.NumericUpDown();
+            this.lblFourierPeriodType = new System.Windows.Forms.Label();
+            this.cmbFourierPeriodType = new System.Windows.Forms.ComboBox();
             this.tabControl = new System.Windows.Forms.TabControl();
             this.tabPageInput = new System.Windows.Forms.TabPage();
             this.lblAnalysisResults = new System.Windows.Forms.Label();
@@ -53,6 +62,7 @@
             this.tabPageAnalysis.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dgvPowerPreview)).BeginInit();
             this.SuspendLayout();
+
 
             // Изначально отключаем всё, кроме выбора файла мощности
             lblTemperatureFile.Enabled = false;
@@ -89,6 +99,65 @@
             this.tabPageInput.TabIndex = 0;
             this.tabPageInput.Text = "Загрузка данных";
             this.tabPageInput.UseVisualStyleBackColor = true;
+
+            // lblCutoffRatio
+            this.lblCutoffRatio.AutoSize = true;
+            this.lblCutoffRatio.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
+            this.lblCutoffRatio.Location = new System.Drawing.Point(20, 180);
+            this.lblCutoffRatio.Name = "lblCutoffRatio";
+            this.lblCutoffRatio.Size = new System.Drawing.Size(250, 20);
+            this.lblCutoffRatio.TabIndex = 11;
+            this.lblCutoffRatio.Text = "Процент оставляемых НЧ (%):";
+
+            // numCutoffRatio
+            this.numCutoffRatio.DecimalPlaces = 1;
+            this.numCutoffRatio.Increment = new decimal(new int[] {
+            1,
+            0,
+            0,
+            65536});
+            this.numCutoffRatio.Location = new System.Drawing.Point(280, 180);
+            this.numCutoffRatio.Maximum = new decimal(new int[] {
+             100,
+             0,
+             0,
+             0});
+            this.numCutoffRatio.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.numCutoffRatio.Name = "numCutoffRatio";
+            this.numCutoffRatio.Size = new System.Drawing.Size(120, 22);
+            this.numCutoffRatio.TabIndex = 12;
+            this.numCutoffRatio.Value = new decimal(new int[] {
+            10,
+            0,
+            0,
+            0});
+            this.numCutoffRatio.ValueChanged += new System.EventHandler(this.NumCutoffRatio_ValueChanged);
+
+            // lblPeriodType
+            this.lblFourierPeriodType.AutoSize = true;
+            this.lblFourierPeriodType.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
+            this.lblFourierPeriodType.Location = new System.Drawing.Point(420, 180);
+            this.lblFourierPeriodType.Name = "lblPeriodType";
+            this.lblFourierPeriodType.Size = new System.Drawing.Size(180, 20);
+            this.lblFourierPeriodType.TabIndex = 13;
+            this.lblFourierPeriodType.Text = "Тип периода анализа:";
+
+            // cmbPeriodType
+            this.cmbFourierPeriodType.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cmbFourierPeriodType.FormattingEnabled = true;
+            this.cmbFourierPeriodType.Items.AddRange(new object[] {
+            "Осенне-зимние периоды (Сен-Май)",
+            "Ежемесячные периоды",
+            "Еженедельные периоды"});
+            this.cmbFourierPeriodType.Location = new System.Drawing.Point(420, 210);
+            this.cmbFourierPeriodType.Name = "cmbPeriodType";
+            this.cmbFourierPeriodType.Size = new System.Drawing.Size(280, 24);
+            this.cmbFourierPeriodType.TabIndex = 14;
+            this.cmbFourierPeriodType.SelectedIndexChanged += new System.EventHandler(this.CmbFourierPeriodType_SelectedIndexChanged);
 
             // lblPowerFile
             this.lblPowerFile.AutoSize = true;
@@ -141,7 +210,7 @@
             // lblStatus
             this.lblStatus.AutoSize = true;
             this.lblStatus.Font = new System.Drawing.Font("Microsoft Sans Serif", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
-            this.lblStatus.Location = new System.Drawing.Point(20, 220);
+            this.lblStatus.Location = new System.Drawing.Point(20, 300);
             this.lblStatus.Name = "lblStatus";
             this.lblStatus.Size = new System.Drawing.Size(126, 18);
             this.lblStatus.TabIndex = 6;
@@ -150,9 +219,9 @@
             // btnAnalyze
             this.btnAnalyze.Enabled = false;
             this.btnAnalyze.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
-            this.btnAnalyze.Location = new System.Drawing.Point(20, 180);
+            this.btnAnalyze.Location = new System.Drawing.Point(20, 250);
             this.btnAnalyze.Name = "btnAnalyze";
-            this.btnAnalyze.Size = new System.Drawing.Size(620, 40);
+            this.btnAnalyze.Size = new System.Drawing.Size(680, 40);
             this.btnAnalyze.TabIndex = 8;
             this.btnAnalyze.Text = "Построение графика";
             this.btnAnalyze.UseVisualStyleBackColor = true;
@@ -161,7 +230,7 @@
             this.dgvPowerPreview.AllowUserToAddRows = false;
             this.dgvPowerPreview.AllowUserToDeleteRows = false;
             this.dgvPowerPreview.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dgvPowerPreview.Location = new System.Drawing.Point(20, 280);
+            this.dgvPowerPreview.Location = new System.Drawing.Point(20, 340);
             this.dgvPowerPreview.Name = "dgvPowerPreview";
             this.dgvPowerPreview.ReadOnly = true;
             this.dgvPowerPreview.RowHeadersVisible = false;
@@ -226,6 +295,12 @@
             this.tabPageAnalysis.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.dgvPowerPreview)).EndInit();
             this.ResumeLayout(false);
+
+            // Добавляем контролы на форму
+            this.tabPageInput.Controls.Add(this.lblCutoffRatio);
+            this.tabPageInput.Controls.Add(this.numCutoffRatio);
+            this.tabPageInput.Controls.Add(this.lblFourierPeriodType);
+            this.tabPageInput.Controls.Add(this.cmbFourierPeriodType);
         }
     }
 }

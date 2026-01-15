@@ -2,7 +2,7 @@
 using System.Drawing;
 using System.Threading;
 using System.Windows.Forms;
-using ClassLibrary1; // Добавьте ссылку на ClassLibrary1
+using ClassLibrary1;
 
 namespace WindowsFormsApp1
 {

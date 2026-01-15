@@ -18,6 +18,10 @@ namespace WindowsFormsApp1
         private List<HourlyData> powerData;
         private List<HourlyData> allTemperatureData; // Все интерполированные температуры
         private List<HourlyData> matchedData; // Сопоставленные данные
+        
+        // Добавьте эти переменные в класс
+        private double _cutoffRatio = 0.1; // По умолчанию 10%
+        private string _fourierPeriodType = "Осенне-зимние периоды (Сен-Май)";
 
         public InitialFormStatic()
         {
@@ -33,6 +37,107 @@ namespace WindowsFormsApp1
             UpdateUIState(); // Новый метод для управления состоянием UI
         }
 
+        // Метод для обработки изменения cutoff ratio
+        private void NumCutoffRatio_ValueChanged(object sender, EventArgs e)
+        {
+            _cutoffRatio = (double)numCutoffRatio.Value / 100.0; // Конвертируем проценты в десятичную дробь
+            UpdateStatus($"Cutoff ratio: {_cutoffRatio:P0}", Color.Blue);
+        }
+
+        // Метод для обработки выбора типа периода Фурье
+        private void CmbFourierPeriodType_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cmbFourierPeriodType.SelectedItem != null)
+            {
+                _fourierPeriodType = cmbFourierPeriodType.SelectedItem.ToString(); // ← Используйте _fourierPeriodType
+                UpdateStatus($"Выбран период Фурье: {_fourierPeriodType}", Color.Blue);
+            }
+        }
+
+        /// <summary>
+        /// Применяет Фурье-фильтрацию к данным с выбранным типом периода
+        /// </summary>
+        private List<HourlyData> ApplyFourierFilterByPeriod(
+            List<HourlyData> data,
+            bool isPowerData,
+            ProcessingFormWithCancel progressForm,
+            CancellationTokenSource cts)
+        {
+            var result = new List<HourlyData>();
+
+            try
+            {
+                if (data == null || data.Count == 0)
+                    return data;
+
+                // Разделяем данные на периоды в зависимости от выбранного типа
+                var periods = SplitDataIntoFourierPeriods(data, _fourierPeriodType);
+
+                progressForm.UpdateProgress($"Фурье-фильтрация: найдено {periods.Count} периодов", 30);
+
+                // Обрабатываем каждый период отдельно
+                for (int i = 0; i < periods.Count; i++)
+                {
+                    // Проверяем отмену
+                    if (cts.Token.IsCancellationRequested)
+                        return null;
+
+                    var period = periods[i];
+                    int progress = 30 + (i * 40 / Math.Max(1, periods.Count));
+
+                    progressForm.UpdateProgress($"Фурье-фильтрация периода {i + 1} из {periods.Count}...", progress);
+
+                    // Применяем Фурье-фильтр к периоду
+                    List<HourlyData> filteredPeriodData;
+
+                    if (isPowerData)
+                    {
+                        filteredPeriodData = ClassLibrary1.FourierProcessor.ProcessPowerDataWithProgress(
+                            period.Data, _cutoffRatio, progressForm, cts);
+                    }
+                    else
+                    {
+                        filteredPeriodData = ClassLibrary1.FourierProcessor.ProcessTemperatureDataWithProgress(
+                            period.Data, _cutoffRatio, progressForm, cts);
+                    }
+
+                    // Проверяем отмену
+                    if (cts.Token.IsCancellationRequested || filteredPeriodData == null)
+                        return null;
+
+                    // Добавляем отфильтрованные данные в результат
+                    result.AddRange(filteredPeriodData);
+                }
+
+                // Сортируем по дате
+                result = result.OrderBy(d => d.DateTime).ToList();
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка Фурье-фильтрации: {ex.Message}");
+                return data; // Возвращаем оригинальные данные в случае ошибки
+            }
+        }
+
+        /// <summary>
+        /// Разделяет данные на периоды для Фурье-преобразования
+        /// </summary>
+        private List<DataPeriod> SplitDataIntoFourierPeriods(List<HourlyData> allData, string periodType)
+        {
+            switch (periodType)
+            {
+                case "Еженедельные периоды":
+                    return SplitIntoWeeklyFourierPeriods(allData);
+                case "Ежемесячные периоды":
+                    return SplitIntoMonthlyFourierPeriods(allData);
+                case "Осенне-зимние периоды (Сен-Май)":
+                default:
+                    return SplitIntoAutumnWinterFourierPeriods(allData);
+            }
+        }
+
         private void ConfigureForm()
         {
             this.Text = "Статический анализ зависимостей";
@@ -40,6 +145,10 @@ namespace WindowsFormsApp1
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
             this.Size = new System.Drawing.Size(1000, 700);
+
+            // Установите значения по умолчанию для новых контролов
+            numCutoffRatio.Value = 10; // 10%
+            cmbFourierPeriodType.SelectedIndex = 0; // Осенне-зимние периоды
 
             // Кнопка для отладки
             var btnDebug = new Button
@@ -101,6 +210,130 @@ namespace WindowsFormsApp1
             }
         }
 
+        /// <summary>
+        /// Разделяет данные на еженедельные периоды для Фурье
+        /// </summary>
+        private List<DataPeriod> SplitIntoWeeklyFourierPeriods(List<HourlyData> allData)
+        {
+            var periods = new List<DataPeriod>();
+
+            if (allData == null || allData.Count == 0)
+                return periods;
+
+            // Сортируем по дате
+            var sortedData = allData.OrderBy(d => d.DateTime).ToList();
+
+            // Группируем по неделям (ISO 8601)
+            var weeklyGroups = sortedData
+                .GroupBy(d =>
+                {
+                    var calendar = System.Globalization.CultureInfo.CurrentCulture.Calendar;
+                    return calendar.GetWeekOfYear(
+                        d.DateTime,
+                        System.Globalization.CalendarWeekRule.FirstFourDayWeek,
+                        DayOfWeek.Monday);
+                })
+                .OrderBy(g => g.Min(d => d.DateTime))
+                .ToList();
+
+            int weekNumber = 1;
+            foreach (var weekGroup in weeklyGroups)
+            {
+                var weekData = weekGroup.OrderBy(d => d.DateTime).ToList();
+
+                if (weekData.Count >= 24) // Минимум 1 день данных
+                {
+                    DateTime weekStart = weekData.Min(d => d.DateTime);
+                    DateTime weekEnd = weekData.Max(d => d.DateTime);
+
+                    periods.Add(new DataPeriod
+                    {
+                        Name = $"Неделя {weekNumber}",
+                        StartYear = weekStart.Year,
+                        EndYear = weekEnd.Year,
+                        PeriodStart = weekStart,
+                        PeriodEnd = weekEnd,
+                        Data = weekData
+                    });
+
+                    weekNumber++;
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Создано {periods.Count} недельных периодов для Фурье");
+            return periods;
+        }
+
+        /// <summary>
+        /// Разделяет данные на ежемесячные периоды для Фурье
+        /// </summary>
+        private List<DataPeriod> SplitIntoMonthlyFourierPeriods(List<HourlyData> allData)
+        {
+            var periods = new List<DataPeriod>();
+
+            if (allData == null || allData.Count == 0)
+                return periods;
+
+            // Сортируем по дате
+            var sortedData = allData.OrderBy(d => d.DateTime).ToList();
+
+            // Группируем по году и месяцу
+            var monthlyGroups = sortedData
+                .GroupBy(d => new { d.DateTime.Year, d.DateTime.Month })
+                .OrderBy(g => g.Key.Year)
+                .ThenBy(g => g.Key.Month)
+                .ToList();
+
+            foreach (var monthGroup in monthlyGroups)
+            {
+                var monthData = monthGroup.OrderBy(d => d.DateTime).ToList();
+
+                if (monthData.Count >= 24) // Минимум 1 день данных
+                {
+                    DateTime monthStart = monthData.Min(d => d.DateTime);
+                    DateTime monthEnd = monthData.Max(d => d.DateTime);
+
+                    string monthName = GetMonthName(monthStart.Month);
+
+                    periods.Add(new DataPeriod
+                    {
+                        Name = $"{monthName} {monthStart.Year}",
+                        StartYear = monthStart.Year,
+                        EndYear = monthStart.Year,
+                        PeriodStart = monthStart,
+                        PeriodEnd = monthEnd,
+                        Data = monthData
+                    });
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Создано {periods.Count} месячных периодов для Фурье");
+            return periods;
+        }
+
+        /// <summary>
+        /// Получает название месяца
+        /// </summary>
+        private string GetMonthName(int month)
+        {
+            switch (month)
+            {
+                case 1: return "Январь";
+                case 2: return "Февраль";
+                case 3: return "Март";
+                case 4: return "Апрель";
+                case 5: return "Май";
+                case 6: return "Июнь";
+                case 7: return "Июль";
+                case 8: return "Август";
+                case 9: return "Сентябрь";
+                case 10: return "Октябрь";
+                case 11: return "Ноябрь";
+                case 12: return "Декабрь";
+                default: return $"Месяц {month}";
+            }
+        }
+
         private void UpdateUIState()
         {
             bool hasPowerData = powerData != null && powerData.Count > 0;
@@ -111,7 +344,13 @@ namespace WindowsFormsApp1
             txtTemperatureFile.Enabled = hasPowerData;
             btnBrowseTemperature.Enabled = hasPowerData;
 
-            // Шаг 2: Разрешаем построение графика только после загрузки обоих файлов
+            // Шаг 2: Разрешаем настройки Фурье только после загрузки обоих файлов
+            lblCutoffRatio.Enabled = hasPowerData && hasTempData;
+            numCutoffRatio.Enabled = hasPowerData && hasTempData;
+            lblFourierPeriodType.Enabled = hasPowerData && hasTempData;
+            cmbFourierPeriodType.Enabled = hasPowerData && hasTempData;
+
+            // Шаг 3: Разрешаем построение графика только после загрузки обоих файлов
             btnAnalyze.Enabled = hasPowerData && hasTempData && matchedData != null && matchedData.Count > 0;
 
             // Обновляем статус
@@ -128,7 +367,18 @@ namespace WindowsFormsApp1
             else if (matchedData != null && matchedData.Count > 0)
             {
                 lblStatus.Text = $"Сопоставлено {matchedData.Count} записей. Можно строить график";
-                lblPowerPreview.Text = $"Сопоставленные данные (по наименьшему количеству):";
+                lblPowerPreview.Text = $"Сопоставленные данные:";
+
+                // Показываем текущие настройки Фурье
+                lblStatus.Text += $"\nНастройки Фурье: Cutoff Ratio = {_cutoffRatio:P0}, Период = {_fourierPeriodType}";
+            }
+            else if (matchedData != null && matchedData.Count > 0)
+            {
+                lblStatus.Text = $"Сопоставлено {matchedData.Count} записей. Можно строить график";
+                lblPowerPreview.Text = $"Сопоставленные данные:";
+
+                // Показываем текущие настройки Фурье
+                lblStatus.Text += $"\nНастройки Фурье: Cutoff Ratio = {_cutoffRatio:P0}, Период = {_fourierPeriodType}"; // ← Используйте _fourierPeriodType
             }
         }
 
@@ -748,8 +998,8 @@ namespace WindowsFormsApp1
 
             try
             {
-                // ОТЛАДКА: проверяем данные перед обработкой
                 System.Diagnostics.Debug.WriteLine("=== НАЧАЛО АНАЛИЗА ===");
+                System.Diagnostics.Debug.WriteLine($"Настройки Фурье: Cutoff Ratio = {_cutoffRatio:P0}, Период = {_fourierPeriodType}");
 
                 if (matchedData == null || matchedData.Count < 4)
                 {
@@ -766,7 +1016,7 @@ namespace WindowsFormsApp1
 
                 try
                 {
-                    progressForm.UpdateProgress("Разделение данных на периоды...", 10);
+                    progressForm.UpdateProgress("Подготовка данных...", 10);
 
                     // Проверяем отмену
                     if (cts.Token.IsCancellationRequested)
@@ -786,10 +1036,12 @@ namespace WindowsFormsApp1
                         return;
                     }
 
-                    // 2. Разделяем данные на осенне-зимние периоды
-                    var dataPeriods = SplitIntoAutumnWinterPeriods(validData);
+                    progressForm.UpdateProgress("Разделение данных на осенне-зимние периоды...", 20);
 
-                    progressForm.UpdateProgress($"Найдено {dataPeriods.Count} периода(ов)", 20);
+                    // 2. Разделяем данные на осенне-зимние периоды (как и раньше, для регрессии)
+                    var autumnWinterPeriods = SplitIntoAutumnWinterFourierPeriods(validData);
+
+                    progressForm.UpdateProgress($"Найдено {autumnWinterPeriods.Count} осенне-зимних периода(ов)", 25);
 
                     // Проверяем отмену
                     if (cts.Token.IsCancellationRequested)
@@ -798,10 +1050,10 @@ namespace WindowsFormsApp1
                         return;
                     }
 
-                    // 3. Обрабатываем каждый период отдельно
+                    // 3. Обрабатываем каждый осенне-зимний период отдельно с Фурье-фильтрацией
                     var processedPeriods = new List<DataPeriod>();
 
-                    for (int i = 0; i < dataPeriods.Count; i++)
+                    for (int i = 0; i < autumnWinterPeriods.Count; i++)
                     {
                         // Проверяем отмену
                         if (cts.Token.IsCancellationRequested)
@@ -810,14 +1062,15 @@ namespace WindowsFormsApp1
                             return;
                         }
 
-                        var period = dataPeriods[i];
-                        int progress = 20 + (i * 70 / Math.Max(1, dataPeriods.Count));
+                        var period = autumnWinterPeriods[i];
+                        int progress = 25 + (i * 50 / Math.Max(1, autumnWinterPeriods.Count));
 
-                        progressForm.UpdateProgress($"Обработка периода: {period.Name} ({i + 1}/{dataPeriods.Count})...", progress);
+                        progressForm.UpdateProgress($"Обработка периода: {period.Name} ({i + 1}/{autumnWinterPeriods.Count})...", progress);
 
                         // Проверяем, что в периоде достаточно данных
                         if (period.Data.Count < 4)
                         {
+                            System.Diagnostics.Debug.WriteLine($"Пропущен период '{period.Name}': недостаточно данных ({period.Data.Count})");
                             continue;
                         }
 
@@ -838,12 +1091,11 @@ namespace WindowsFormsApp1
                                 Value = d.Value
                             }).ToList();
 
-                            // Применяем Фурье с поддержкой прогресса
-                            progressForm.UpdateProgress($"Применение Фурье-фильтра...", progress + 5);
+                            // ПРИМЕНЯЕМ ФУРЬЕ С НАСТРОЙКАМИ ПОЛЬЗОВАТЕЛЯ
+                            progressForm.UpdateProgress($"Применение Фурье-фильтра (мощность)...", progress + 5);
 
-                            double cutoffRatio = 0.1;
-                            var filteredPowerData = ClassLibrary1.FourierProcessor.ProcessPowerDataWithProgress(
-                                                    periodPowerData, cutoffRatio, progressForm, cts);
+                            var filteredPowerData = ApplyFourierFilterByPeriod(
+                                periodPowerData, true, progressForm, cts);
 
                             // Проверяем отмену
                             if (cts.Token.IsCancellationRequested || filteredPowerData == null)
@@ -854,8 +1106,8 @@ namespace WindowsFormsApp1
 
                             progressForm.UpdateProgress($"Применение Фурье-фильтра (температура)...", progress + 10);
 
-                            var filteredTempData = ClassLibrary1.FourierProcessor.ProcessTemperatureDataWithProgress(
-                                                    periodTempData, cutoffRatio, progressForm, cts);
+                            var filteredTempData = ApplyFourierFilterByPeriod(
+                                periodTempData, false, progressForm, cts);
 
                             // Проверяем отмену
                             if (cts.Token.IsCancellationRequested || filteredTempData == null)
@@ -866,12 +1118,14 @@ namespace WindowsFormsApp1
 
                             // Сопоставляем отфильтрованные данные
                             var filteredMatchedData = new List<HourlyData>();
-                            for (int j = 0; j < periodPowerData.Count; j++)
+                            int minCount = Math.Min(filteredPowerData.Count, filteredTempData.Count);
+
+                            for (int j = 0; j < minCount; j++)
                             {
                                 filteredMatchedData.Add(new HourlyData
                                 {
-                                    DateTime = periodPowerData[j].DateTime,
-                                    Hour = periodPowerData[j].Hour,
+                                    DateTime = filteredPowerData[j].DateTime,
+                                    Hour = filteredPowerData[j].Hour,
                                     Value = filteredTempData[j].Value,
                                     PowerValue = filteredPowerData[j].Value
                                 });
@@ -887,6 +1141,8 @@ namespace WindowsFormsApp1
                                 PeriodEnd = period.PeriodEnd,
                                 Data = filteredMatchedData
                             });
+
+                            System.Diagnostics.Debug.WriteLine($"Обработан период '{period.Name}': {filteredMatchedData.Count} точек");
                         }
                         catch (Exception ex)
                         {
@@ -905,75 +1161,21 @@ namespace WindowsFormsApp1
                         return;
                     }
 
-                    progressForm.UpdateProgress("Аппроксимация данных...", 90);
+                    progressForm.UpdateProgress("Открытие окна с маркерами...", 80);
 
-                    // Проверяем отмену
-                    if (cts.Token.IsCancellationRequested)
-                    {
-                        progressForm.SetProcessing(false);
-                        return;
-                    }
+                    // 4. Показываем форму с маркерами (ChartForm)
+                    // Здесь нужно создать ChartForm, которая покажет маркеры после Фурье
+                    // и будет иметь кнопку "Аппроксимировать"
 
-                    // 4. Выполняем регрессионный анализ
-                    var regressionResults = new List<ClassLibrary1.RegressionResult>();
-
-                    for (int i = 0; i < processedPeriods.Count; i++)
-                    {
-                        // Проверяем отмену
-                        if (cts != null && cts.Token.IsCancellationRequested)
-                        {
-                            progressForm.SetProcessing(false);
-                            return;
-                        }
-
-                        var period = processedPeriods[i];
-
-                        // Обновляем прогресс для регрессии
-                        int regressionProgress = 90 + (i * 5) / Math.Max(1, processedPeriods.Count);
-                        progressForm.UpdateProgress($"Аппроксимация периода: {period.Name} ({i + 1}/{processedPeriods.Count})...",
-                                                   Math.Min(90 + regressionProgress, 98));
-
-                        try
-                        {
-                            // Собираем данные для регрессии
-                            var temperatures = period.Data.Select(d => d.Value).ToList();
-                            var powers = period.Data.Select(d => d.PowerValue.Value).ToList();
-
-                            // ВАЖНО: Используйте ваш существующий класс RegressionCalculator!
-                            var result = ClassLibrary1.RegressionCalculator.CalculateRegressions(
-                                period.Name, temperatures, powers);
-
-                            if (result != null && result.Temperatures.Count > 0)
-                            {
-                                regressionResults.Add(result);
-                                System.Diagnostics.Debug.WriteLine($"Регрессия для периода '{period.Name}' успешно рассчитана");
-                            }
-                            else
-                            {
-                                System.Diagnostics.Debug.WriteLine($"Не удалось рассчитать регрессию для периода '{period.Name}'");
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Debug.WriteLine($"Ошибка регрессии для периода '{period.Name}': {ex.Message}");
-                        }
-                    }
-
-                    progressForm.UpdateProgress("Построение графика...", 95);
-
-                    // 5. Показываем форму с графиками
                     progressForm.SetProcessing(false);
 
-                    if (regressionResults.Count > 0)
-                    {
-                        var regressionForm = new RegressionFormDB(regressionResults);
-                        regressionForm.ShowDialog();
-                    }
-                    else
-                    {
-                        MessageBox.Show("Не удалось выполнить регрессионный анализ",
-                            "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    }
+                    // Создаем и показываем форму с маркерами
+                    var chartForm = new ChartForm(processedPeriods, true);
+                    chartForm.ShowDialog();
+
+                    // Когда пользователь нажмет "Аппроксимировать" в ChartForm,
+                    // откроется RegressionFormDB с результатами регрессии
+
                 }
                 catch (Exception ex)
                 {
@@ -986,152 +1188,34 @@ namespace WindowsFormsApp1
             {
                 System.Diagnostics.Debug.WriteLine($"Ошибка BtnAnalyze_Click: {ex.Message}\n{ex.StackTrace}");
             }
+            finally
+            {
+                System.Diagnostics.Debug.WriteLine("=== КОНЕЦ АНАЛИЗА ===");
+            }
         }
 
-        private List<DataPeriod> SplitIntoAutumnWinterPeriods(List<HourlyData> allData)
+        /// <summary>
+        /// Разделяет данные на осенне-зимние периоды для Фурье
+        /// </summary>
+        private List<DataPeriod> SplitIntoAutumnWinterFourierPeriods(List<HourlyData> allData)
         {
             var periods = new List<DataPeriod>();
 
             if (allData == null || allData.Count == 0)
-            {
-                System.Diagnostics.Debug.WriteLine("SplitIntoAutumnWinterPeriods: allData пуст или null");
                 return periods;
-            }
 
-            System.Diagnostics.Debug.WriteLine($"SplitIntoAutumnWinterPeriods: всего {allData.Count} точек");
-
-            // Находим диапазон дат
-            DateTime minDate = allData.Min(d => d.DateTime);
-            DateTime maxDate = allData.Max(d => d.DateTime);
-            System.Diagnostics.Debug.WriteLine($"Диапазон дат: {minDate:dd.MM.yyyy} - {maxDate:dd.MM.yyyy}");
-
-            // Группируем данные по годам и месяцам
-            var monthlyGroups = allData
-                .GroupBy(d => new { d.DateTime.Year, d.DateTime.Month })
-                .OrderBy(g => g.Key.Year)
-                .ThenBy(g => g.Key.Month)
-                .ToList();
-
-            System.Diagnostics.Debug.WriteLine($"Найдено месяцев: {monthlyGroups.Count}");
-
-            // Для каждого осенне-зимнего периода (сентябрь-май)
-            // Ищем года, где есть данные с сентября по май
-            var years = allData.Select(d => d.DateTime.Year).Distinct().OrderBy(y => y).ToList();
-
-            foreach (int year in years)
+            // Просто возвращаем все данные как один период
+            periods.Add(new DataPeriod
             {
-                int nextYear = year + 1;
+                Name = "Весь период",
+                StartYear = allData.Min(d => d.DateTime).Year,
+                EndYear = allData.Max(d => d.DateTime).Year,
+                PeriodStart = allData.Min(d => d.DateTime),
+                PeriodEnd = allData.Max(d => d.DateTime),
+                Data = allData.OrderBy(d => d.DateTime).ToList()
+            });
 
-                // Собираем данные для периода: сентябрь-декабрь текущего года + январь-май следующего
-                List<HourlyData> periodData = new List<HourlyData>();
-
-                // Текущий год: сентябрь-декабрь
-                for (int month = 9; month <= 12; month++)
-                {
-                    var monthData = allData.Where(d =>
-                        d.DateTime.Year == year &&
-                        d.DateTime.Month == month).ToList();
-
-                    if (monthData.Count > 0)
-                    {
-                        periodData.AddRange(monthData);
-                        System.Diagnostics.Debug.WriteLine($"Год {year}, месяц {month}: {monthData.Count} точек");
-                    }
-                }
-
-                // Следующий год: январь-май
-                for (int month = 1; month <= 5; month++)
-                {
-                    var monthData = allData.Where(d =>
-                        d.DateTime.Year == nextYear &&
-                        d.DateTime.Month == month).ToList();
-
-                    if (monthData.Count > 0)
-                    {
-                        periodData.AddRange(monthData);
-                        System.Diagnostics.Debug.WriteLine($"Год {nextYear}, месяц {month}: {monthData.Count} точек");
-                    }
-                }
-
-                // Если в периоде достаточно данных
-                if (periodData.Count >= 24) // Минимум 1 день данных (24 часа)
-                {
-                    // Сортируем по дате
-                    periodData = periodData.OrderBy(d => d.DateTime).ToList();
-
-                    // Определяем фактические границы периода
-                    DateTime actualStart = periodData.Min(d => d.DateTime);
-                    DateTime actualEnd = periodData.Max(d => d.DateTime);
-
-                    var period = new DataPeriod
-                    {
-                        Name = $"Период {year}-{nextYear}",
-                        StartYear = year,
-                        EndYear = nextYear,
-                        PeriodStart = actualStart,
-                        PeriodEnd = actualEnd,
-                        Data = periodData
-                    };
-
-                    periods.Add(period);
-
-                    System.Diagnostics.Debug.WriteLine($"Создан период {period.Name}: " +
-                        $"{periodData.Count} точек, " +
-                        $"{actualStart:dd.MM.yyyy} - {actualEnd:dd.MM.yyyy}");
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"Период {year}-{nextYear} пропущен: только {periodData.Count} точек");
-                }
-            }
-
-            // Если не нашли полных периодов, создаем периоды по годам
-            if (periods.Count == 0)
-            {
-                System.Diagnostics.Debug.WriteLine("Создаем упрощенные периоды по годам...");
-
-                foreach (int year in years)
-                {
-                    var yearData = allData.Where(d => d.DateTime.Year == year).ToList();
-
-                    if (yearData.Count >= 24) // Минимум 1 день
-                    {
-                        // Находим фактические даты начала и конца
-                        DateTime startDate = yearData.Min(d => d.DateTime);
-                        DateTime endDate = yearData.Max(d => d.DateTime);
-
-                        // Оставляем только данные с сентября по май
-                        var filteredData = yearData.Where(d =>
-                            d.DateTime.Month >= 9 || d.DateTime.Month <= 5).ToList();
-
-                        if (filteredData.Count >= 24)
-                        {
-                            var period = new DataPeriod
-                            {
-                                Name = $"Год {year}",
-                                StartYear = year,
-                                EndYear = year,
-                                PeriodStart = startDate,
-                                PeriodEnd = endDate,
-                                Data = filteredData.OrderBy(d => d.DateTime).ToList()
-                            };
-
-                            periods.Add(period);
-                            System.Diagnostics.Debug.WriteLine($"Создан упрощенный период {period.Name}: {filteredData.Count} точек");
-                        }
-                    }
-                }
-            }
-
-            System.Diagnostics.Debug.WriteLine($"Всего создано периодов: {periods.Count}");
-
-            // Логируем информацию о периодах
-            foreach (var period in periods)
-            {
-                System.Diagnostics.Debug.WriteLine($"Период '{period.Name}': {period.Data.Count} точек, " +
-                    $"{period.PeriodStart:dd.MM.yyyy} - {period.PeriodEnd:dd.MM.yyyy}");
-            }
-
+            System.Diagnostics.Debug.WriteLine($"Создан 1 общий период для Фурье");
             return periods;
         }
 

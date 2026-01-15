@@ -14,10 +14,12 @@ namespace WindowsFormsApp1
     public partial class UpdateCoefForm : Form
     {
         private DatabaseService _dbService = new DatabaseService();
-        private DataTable _excelData;
-        private List<EnergySystem> _allSystems = new List<EnergySystem>();
+        private DataSet _excelDataSet;
+        private Dictionary<string, List<EnergySystem>> _allSystemsBySheet = new Dictionary<string, List<EnergySystem>>();
+        private ComboBox cmbSheetSelector;
         private DataGridView dgvSystems;
-        private string _sheetType = "unknown";
+        private Label lblSheetSelector;
+        private string _selectedSheetType = "unknown";
 
         // Ключевые слова для определения типа листа
         private string[] EnergyKeywords => new string[] {
@@ -28,8 +30,8 @@ namespace WindowsFormsApp1
         };
 
         private string[] PowerKeywords => new string[] {
-            "м", "мощность", "power", "мощ", "pwr", "p",
-            "М", "Мощность", "Power", "Мощ", "Pwr", "P",
+            "м", "мощ", "power", "мощ", "pwr", "p",
+            "М", "Мощ", "Power", "Мощ", "Pwr", "P",
             "МОЩ", "PWR"
         };
 
@@ -46,18 +48,42 @@ namespace WindowsFormsApp1
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedSingle;
             this.MaximizeBox = false;
-            this.Size = new Size(800, 600);
+            this.Size = new Size(900, 700);
 
             // Скрываем выбор системы и DataGridView из дизайнера
             cmbSystems.Visible = false;
             lblSystem.Visible = false;
             dgvRanges.Visible = false;
 
+            // Добавляем Label для выбора листа
+            lblSheetSelector = new Label
+            {
+                Name = "lblSheetSelector",
+                Location = new Point(12, 105),
+                Size = new Size(120, 20),
+                Text = "Выберите лист:",
+                Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Regular),
+                Visible = false // Изначально скрыт
+            };
+            this.Controls.Add(lblSheetSelector);
+
+            // Добавляем ComboBox для выбора листа
+            cmbSheetSelector = new ComboBox
+            {
+                Name = "cmbSheetSelector",
+                Location = new Point(140, 102),
+                Size = new Size(300, 24),
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Visible = false // Изначально скрыт
+            };
+            cmbSheetSelector.SelectedIndexChanged += CmbSheetSelector_SelectedIndexChanged;
+            this.Controls.Add(cmbSheetSelector);
+
             // Создаем новый DataGridView для отображения систем
             dgvSystems = new DataGridView
             {
                 Location = new Point(12, 170),
-                Size = new Size(760, 250),
+                Size = new Size(860, 350),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
                 AllowUserToAddRows = false,
                 AllowUserToDeleteRows = false,
@@ -70,16 +96,41 @@ namespace WindowsFormsApp1
             // Добавляем информационную метку
             var lblInfo = new Label
             {
-                Location = new Point(12, 430),
-                Size = new Size(760, 40),
+                Location = new Point(12, 530),
+                Size = new Size(860, 40),
                 Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Regular),
                 Text = "Все найденные энергосистемы будут сохранены одновременно."
             };
             this.Controls.Add(lblInfo);
 
             // Перемещаем кнопки вниз
-            btnSave.Location = new Point(584, 480);
-            btnCancel.Location = new Point(680, 480);
+            btnSave.Location = new Point(684, 580);
+            btnCancel.Location = new Point(780, 580);
+        }
+
+        private void CmbSheetSelector_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cmbSheetSelector.SelectedItem != null)
+            {
+                string selectedSheet = cmbSheetSelector.SelectedItem.ToString();
+                if (_allSystemsBySheet.ContainsKey(selectedSheet))
+                {
+                    DisplaySystemsForSheet(selectedSheet);
+                }
+                else
+                {
+                    // Если данные еще не загружены, загружаем их
+                    DataTable sheetData = _excelDataSet.Tables[selectedSheet];
+                    if (sheetData != null)
+                    {
+                        // Определяем тип листа
+                        string sheetType = DetectSheetType(Path.GetFileNameWithoutExtension(txtFilePath.Text), selectedSheet);
+                        _selectedSheetType = sheetType;
+                        ParseExcelData(sheetData, sheetType);
+                        DisplaySystemsForSheet(selectedSheet);
+                    }
+                }
+            }
         }
 
         private void InitializePlaceholderText()
@@ -133,7 +184,7 @@ namespace WindowsFormsApp1
                 using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read))
                 using (var reader = ExcelReaderFactory.CreateReader(stream))
                 {
-                    var result = reader.AsDataSet(new ExcelDataSetConfiguration()
+                    _excelDataSet = reader.AsDataSet(new ExcelDataSetConfiguration()
                     {
                         ConfigureDataTable = (tableReader) => new ExcelDataTableConfiguration()
                         {
@@ -142,15 +193,48 @@ namespace WindowsFormsApp1
                         UseColumnDataType = true
                     });
 
-                    if (result.Tables.Count > 0)
+                    if (_excelDataSet.Tables.Count > 0)
                     {
-                        // Пробуем определить тип по имени файла
-                        string fileName = Path.GetFileNameWithoutExtension(filePath);
-                        _sheetType = DetectSheetType(fileName, result.Tables[0].TableName);
+                        // Заполняем список листов
+                        cmbSheetSelector.Items.Clear();
+                        _allSystemsBySheet.Clear();
 
-                        _excelData = result.Tables[0];
-                        ParseExcelData();
-                        DisplaySystems();
+                        // Пробуем автоматически определить типы листов
+                        foreach (DataTable sheet in _excelDataSet.Tables)
+                        {
+                            string sheetName = sheet.TableName;
+                            cmbSheetSelector.Items.Add(sheetName);
+                        }
+
+                        // Если есть несколько листов, показываем выпадающий список
+                        if (_excelDataSet.Tables.Count > 1)
+                        {
+                            cmbSheetSelector.Visible = true;
+                            lblSheetSelector.Visible = true;
+
+                            // Устанавливаем текст для всех найденных листов
+                            lblSheetType.Text = $"Найдено листов: {_excelDataSet.Tables.Count}";
+
+                            // Загружаем данные для первого листа по умолчанию
+                            if (cmbSheetSelector.Items.Count > 0)
+                            {
+                                cmbSheetSelector.SelectedIndex = 0;
+                            }
+                        }
+                        else if (_excelDataSet.Tables.Count == 1)
+                        {
+                            // Если только один лист, загружаем его сразу
+                            cmbSheetSelector.Visible = false;
+                            lblSheetSelector.Visible = false;
+
+                            string sheetName = _excelDataSet.Tables[0].TableName;
+                            string sheetType = DetectSheetType(Path.GetFileNameWithoutExtension(filePath), sheetName);
+                            _selectedSheetType = sheetType;
+                            lblSheetType.Text = $"Тип листа: {GetSheetTypeDisplayName(sheetType)}";
+
+                            ParseExcelData(_excelDataSet.Tables[0], sheetType);
+                            DisplaySystemsForSheet(sheetName);
+                        }
                     }
                 }
             }
@@ -158,6 +242,19 @@ namespace WindowsFormsApp1
             {
                 MessageBox.Show($"Ошибка при чтении файла:\n\n{ex.Message}", "Ошибка",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private string GetSheetTypeDisplayName(string sheetType)
+        {
+            switch (sheetType)
+            {
+                case "energy":
+                    return "Коэффициенты для Электроэнергии";
+                case "power":
+                    return "Коэффициенты для Мощности";
+                default:
+                    return "Не определен";
             }
         }
 
@@ -170,7 +267,6 @@ namespace WindowsFormsApp1
             {
                 if (textToCheck.Contains(keyword.ToLower()))
                 {
-                    lblSheetType.Text = "Тип листа: Коэффициенты для ЭЛЕКТРОЭНЕРГИИ";
                     return "energy";
                 }
             }
@@ -180,22 +276,20 @@ namespace WindowsFormsApp1
             {
                 if (textToCheck.Contains(keyword.ToLower()))
                 {
-                    lblSheetType.Text = "Тип листа: Коэффициенты для МОЩНОСТИ";
                     return "power";
                 }
             }
 
-            // Если не нашли, пробуем определить по содержимому
-            lblSheetType.Text = "Тип листа: Не определен (определите вручную)";
-            return ShowTypeSelectionDialog();
+            // Если не нашли, предлагаем выбрать вручную
+            return ShowTypeSelectionDialogForSheet(sheetName);
         }
 
-        private string ShowTypeSelectionDialog()
+        private string ShowTypeSelectionDialogForSheet(string sheetName)
         {
             var dialog = new Form
             {
-                Text = "Выберите тип коэффициентов",
-                Size = new Size(400, 200),
+                Text = $"Выберите тип коэффициентов для листа '{sheetName}'",
+                Size = new Size(500, 220),
                 StartPosition = FormStartPosition.CenterParent,
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 MaximizeBox = false,
@@ -204,16 +298,16 @@ namespace WindowsFormsApp1
 
             var lblMessage = new Label
             {
-                Text = "Не удалось определить тип коэффициентов.\nПожалуйста, выберите вручную:",
+                Text = $"Для листа '{sheetName}' не удалось определить тип коэффициентов.\nПожалуйста, выберите вручную:",
                 Location = new Point(20, 20),
-                Size = new Size(350, 40)
+                Size = new Size(450, 40)
             };
 
             var rbEnergy = new RadioButton
             {
                 Text = "Коэффициенты для электроэнергии",
                 Location = new Point(20, 70),
-                Size = new Size(350, 25),
+                Size = new Size(450, 25),
                 Checked = true
             };
 
@@ -221,13 +315,13 @@ namespace WindowsFormsApp1
             {
                 Text = "Коэффициенты для мощности",
                 Location = new Point(20, 100),
-                Size = new Size(350, 25)
+                Size = new Size(450, 25)
             };
 
             var btnOk = new Button
             {
                 Text = "OK",
-                Location = new Point(150, 140),
+                Location = new Point(200, 165),
                 Size = new Size(100, 30)
             };
 
@@ -239,12 +333,10 @@ namespace WindowsFormsApp1
             {
                 if (rbEnergy.Checked)
                 {
-                    lblSheetType.Text = "Тип листа: Коэффициенты для ЭЛЕКТРОЭНЕРГИИ (выбрано вручную)";
                     return "energy";
                 }
                 else
                 {
-                    lblSheetType.Text = "Тип листа: Коэффициенты для МОЩНОСТИ (выбрано вручную)";
                     return "power";
                 }
             }
@@ -252,16 +344,21 @@ namespace WindowsFormsApp1
             return "unknown";
         }
 
-        private void ParseExcelData()
+        private void ParseExcelData(DataTable excelData, string sheetType)
         {
-            _allSystems.Clear();
+            string sheetName = excelData.TableName;
+
+            if (!_allSystemsBySheet.ContainsKey(sheetName))
+            {
+                _allSystemsBySheet[sheetName] = new List<EnergySystem>();
+            }
 
             // Парсим все системы из файла
             Dictionary<string, List<DataRow>> systemRows = new Dictionary<string, List<DataRow>>();
 
-            for (int i = 0; i < _excelData.Rows.Count; i++)
+            for (int i = 0; i < excelData.Rows.Count; i++)
             {
-                var row = _excelData.Rows[i];
+                var row = excelData.Rows[i];
                 if (row.ItemArray.Length > 4 && row[4] != null && !string.IsNullOrEmpty(row[4].ToString()))
                 {
                     string systemName = row[4].ToString().Trim();
@@ -290,11 +387,9 @@ namespace WindowsFormsApp1
 
                 if (system.Ranges.Count > 0)
                 {
-                    _allSystems.Add(system);
+                    _allSystemsBySheet[sheetName].Add(system);
                 }
             }
-
-            btnSave.Enabled = _allSystems.Count > 0 && _sheetType != "unknown";
         }
 
         private void ParseRangeData(EnergySystem system, List<DataRow> rows)
@@ -347,7 +442,26 @@ namespace WindowsFormsApp1
             }
         }
 
-        private void DisplaySystems()
+        private void DisplaySystemsForSheet(string sheetName)
+        {
+            if (!_allSystemsBySheet.ContainsKey(sheetName) || _allSystemsBySheet[sheetName].Count == 0)
+            {
+                // Если данные еще не загружены, загружаем их
+                DataTable sheetData = _excelDataSet.Tables[sheetName];
+                if (sheetData != null)
+                {
+                    // Определяем тип листа
+                    string sheetType = DetectSheetType(Path.GetFileNameWithoutExtension(txtFilePath.Text), sheetName);
+                    _selectedSheetType = sheetType;
+                    ParseExcelData(sheetData, sheetType);
+                }
+            }
+
+            var systems = _allSystemsBySheet[sheetName];
+            DisplaySystems(systems, sheetName);
+        }
+
+        private void DisplaySystems(List<EnergySystem> systems, string sheetName)
         {
             dgvSystems.Rows.Clear();
             dgvSystems.Columns.Clear();
@@ -355,12 +469,16 @@ namespace WindowsFormsApp1
             dgvSystems.Columns.Add("SystemName", "Энергосистема");
             dgvSystems.Columns.Add("RangeCount", "Кол-во диапазонов");
             dgvSystems.Columns.Add("Ranges", "Диапазоны температур");
+            dgvSystems.Columns.Add("SheetType", "Тип листа");
 
             dgvSystems.Columns["SystemName"].Width = 200;
             dgvSystems.Columns["RangeCount"].Width = 120;
+            dgvSystems.Columns["SheetType"].Width = 150;
             dgvSystems.Columns["Ranges"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
 
-            foreach (var system in _allSystems)
+            string typeDisplay = GetSheetTypeDisplayName(_selectedSheetType);
+
+            foreach (var system in systems)
             {
                 string rangesText = string.Join("; ", system.Ranges
                     .OrderBy(r => r.From)
@@ -369,12 +487,17 @@ namespace WindowsFormsApp1
                 dgvSystems.Rows.Add(
                     system.Name,
                     system.Ranges.Count,
-                    rangesText
+                    rangesText,
+                    typeDisplay
                 );
             }
 
-            // Добавляем информационный текст в заголовок
-            lblTitle.Text = $"Обновление коэффициентов влияния ({_allSystems.Count} систем)";
+            // Обновляем заголовок
+            lblTitle.Text = $"Обновление коэффициентов влияния - {sheetName} ({systems.Count} систем)";
+            lblSheetType.Text = $"Тип листа: {typeDisplay}";
+
+            // Активируем кнопку сохранения если есть данные
+            btnSave.Enabled = systems.Count > 0 && _selectedSheetType != "unknown";
         }
 
         private void btnSave_Click(object sender, EventArgs e)
@@ -389,91 +512,130 @@ namespace WindowsFormsApp1
                 return;
             }
 
-            if (_allSystems.Count == 0)
+            if (_excelDataSet == null || _excelDataSet.Tables.Count == 0)
             {
                 MessageBox.Show("Нет данных для сохранения", "Ошибка",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            if (_sheetType == "unknown")
-            {
-                MessageBox.Show("Не определен тип коэффициентов. Пожалуйста, выберите тип вручную.",
-                    "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
             try
             {
                 DateTime loadDate = DateTime.Now;
-                int savedSystems = 0;
-                int totalSystems = _allSystems.Count;
+                int totalSavedSystems = 0;
+                int totalSheetsProcessed = 0;
 
-                // Получаем ID типа таблицы из БД
-                string tableTypeName = _sheetType == "power"
-                    ? "Коэффициенты влияния по мощности"
-                    : "Коэффициенты влияния по электроэнергии";
-
-                int tableTypeId = _dbService.GetOrCreateTableType(tableTypeName);
-
-                // Сохраняем каждую энергосистему
-                foreach (var system in _allSystems)
+                // Определяем, какой лист сохранять
+                string selectedSheetName = "";
+                if (cmbSheetSelector.Visible && cmbSheetSelector.SelectedItem != null)
                 {
-                    try
+                    selectedSheetName = cmbSheetSelector.SelectedItem.ToString();
+                }
+                else if (_excelDataSet.Tables.Count == 1)
+                {
+                    selectedSheetName = _excelDataSet.Tables[0].TableName;
+                }
+
+                if (string.IsNullOrEmpty(selectedSheetName))
+                {
+                    MessageBox.Show("Не выбран лист для сохранения", "Ошибка",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+
+                // Получаем данные для выбранного листа
+                if (_allSystemsBySheet.ContainsKey(selectedSheetName))
+                {
+                    var systems = _allSystemsBySheet[selectedSheetName];
+                    string sheetType = _selectedSheetType;
+
+                    if (systems.Count == 0)
                     {
-                        // Получаем или создаем энергосистему
-                        int systemId = _dbService.GetOrCreateEnergySystem(system.Name);
-
-                        // Обновляем дату окончания предыдущего набора для этой системы
-                        _dbService.UpdatePreviousParamSetEndDate(systemId, loadDate);
-
-                        // Создаем новый набор параметров
-                        string fullSetName = $"{setName} ({(_sheetType == "power" ? "мощность" : "энергия")})";
-
-                        // Используем правильный метод с table_type_id
-                        int paramSetId = _dbService.CreateForecastParamSet(
-                            fullSetName,
-                            systemId,
-                            tableTypeId,
-                            loadDate);
-
-                        // Сохраняем температурные диапазоны
-                        var dbRanges = new List<TemperatureRangeDb>();
-                        int rangeNumber = 1;
-
-                        foreach (var range in system.Ranges.OrderBy(r => r.From))
-                        {
-                            dbRanges.Add(new TemperatureRangeDb
-                            {
-                                RangeNumber = rangeNumber++,
-                                TempLower = (int?)Math.Round(range.From),
-                                TempUpper = (int?)Math.Round(range.To),
-                                Coefficient = range.Coefficient
-                            });
-                        }
-
-                        _dbService.SaveTemperatureRanges(paramSetId, dbRanges);
-                        savedSystems++;
-
-                        System.Diagnostics.Debug.WriteLine($"Сохранена система: {system.Name}, диапазонов: {dbRanges.Count}");
+                        MessageBox.Show($"На листе '{selectedSheetName}' нет данных для сохранения", "Ошибка",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        return;
                     }
-                    catch (Exception ex)
+
+                    // Определяем тип таблицы
+                    string tableTypeName = sheetType == "power"
+                        ? "Коэффициенты влияния по мощности"
+                        : "Коэффициенты влияния по электроэнергии";
+
+                    int tableTypeId = _dbService.GetOrCreateTableType(tableTypeName);
+
+                    // Сохраняем каждую энергосистему
+                    foreach (var system in systems)
                     {
-                        MessageBox.Show($"Ошибка при сохранении системы '{system.Name}':\n{ex.Message}",
-                            "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        try
+                        {
+                            // Получаем или создаем энергосистему
+                            int systemId = _dbService.GetOrCreateEnergySystem(system.Name);
+
+                            // Обновляем дату окончания предыдущего набора для этой системы
+                            _dbService.UpdatePreviousParamSetEndDate(systemId, loadDate);
+
+                            // Создаем новый набор параметров
+                            string fullSetName = $"{setName} ({GetSheetTypeDisplayName(sheetType)})";
+
+                            // Используем правильный метод с table_type_id
+                            int paramSetId = _dbService.CreateForecastParamSet(
+                                fullSetName,
+                                systemId,
+                                tableTypeId,
+                                loadDate);
+
+                            // Сохраняем температурные диапазоны
+                            var dbRanges = new List<TemperatureRangeDb>();
+                            int rangeNumber = 1;
+
+                            foreach (var range in system.Ranges.OrderBy(r => r.From))
+                            {
+                                dbRanges.Add(new TemperatureRangeDb
+                                {
+                                    RangeNumber = rangeNumber++,
+                                    TempLower = (int?)Math.Round(range.From),
+                                    TempUpper = (int?)Math.Round(range.To),
+                                    Coefficient = range.Coefficient
+                                });
+                            }
+
+                            _dbService.SaveTemperatureRanges(paramSetId, dbRanges);
+                            totalSavedSystems++;
+
+                            System.Diagnostics.Debug.WriteLine($"Сохранена система: {system.Name} из листа {selectedSheetName}, диапазонов: {dbRanges.Count}");
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"Ошибка при сохранении системы '{system.Name}' из листа '{selectedSheetName}':\n{ex.Message}",
+                                "Предупреждение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                        }
+                    }
+
+                    if (totalSavedSystems > 0)
+                    {
+                        totalSheetsProcessed++;
                     }
                 }
 
-                MessageBox.Show($"Коэффициенты успешно сохранены!\n\n" +
-                               $"Тип: {(_sheetType == "power" ? "Мощность" : "Электроэнергия")}\n" +
-                               $"Набор: {setName}\n" +
-                               $"Сохранено систем: {savedSystems} из {totalSystems}\n" +
-                               $"Дата загрузки: {loadDate:dd.MM.yyyy HH:mm}",
-                               "Успешно",
-                               MessageBoxButtons.OK,
-                               MessageBoxIcon.Information);
+                if (totalSavedSystems > 0)
+                {
+                    MessageBox.Show($"Коэффициенты успешно сохранены!\n\n" +
+                                   $"Лист: {selectedSheetName}\n" +
+                                   $"Тип: {GetSheetTypeDisplayName(_selectedSheetType)}\n" +
+                                   $"Сохранено систем: {totalSavedSystems}\n" +
+                                   $"Название набора: {setName}\n" +
+                                   $"Дата загрузки: {loadDate:dd.MM.yyyy HH:mm}",
+                                   "Успешно",
+                                   MessageBoxButtons.OK,
+                                   MessageBoxIcon.Information);
 
-                this.Close();
+                    this.Close();
+                }
+                else
+                {
+                    MessageBox.Show("Не удалось сохранить данные из выбранного листа",
+                        "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
             catch (Exception ex)
             {

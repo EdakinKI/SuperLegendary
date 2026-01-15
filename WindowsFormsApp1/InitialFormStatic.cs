@@ -138,8 +138,6 @@ namespace WindowsFormsApp1
             btnAnalyze.Click += BtnAnalyze_Click;
         }
 
-        #region Загрузка данных мощности
-
         private void BtnBrowsePower_Click(object sender, EventArgs e)
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
@@ -264,10 +262,6 @@ namespace WindowsFormsApp1
 
             return powerList;
         }
-
-        #endregion
-
-        #region Загрузка данных температуры (все листы)
 
         private void BtnBrowseTemperature_Click(object sender, EventArgs e)
         {
@@ -664,14 +658,6 @@ namespace WindowsFormsApp1
             return 0;
         }
 
-        #endregion
-
-        #region Сопоставление данных
-
-        #endregion
-
-        #region Анализ зависимости
-
         private void BtnAnalyze_Click(object sender, EventArgs e)
         {
             try
@@ -1025,10 +1011,6 @@ namespace WindowsFormsApp1
             return periods;
         }
 
-        #endregion
-
-        #region Вспомогательные методы
-
         private void UpdateStatus(string message, Color color)
         {
             lblStatus.Text = $"Статус: {message}";
@@ -1116,7 +1098,5 @@ namespace WindowsFormsApp1
                                       $"(из {powerCount} мощности и {tempCount} температуры)";
             }
         }
-
-        #endregion
     }
 }

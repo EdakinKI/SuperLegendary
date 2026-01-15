@@ -140,6 +140,9 @@
     <Compile Include="ProcessingForm.Designer.cs">
       <DependentUpon>ProcessingForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="ProcessingFormWithCancel.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="RegressionForm.cs">
       <SubType>Form</SubType>
     </Compile>

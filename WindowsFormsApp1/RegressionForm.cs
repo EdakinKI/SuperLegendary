@@ -74,64 +74,71 @@ namespace WindowsFormsApp1
         private void BtnSaveToDb_Click(object sender, EventArgs e)
         {
             var dialogResult = MessageBox.Show(
-                "Сохранить результаты статического анализа в базу данных?\n\n" +
-                "Будут сохранены коэффициенты линейной и экспоненциальной регрессии для всех периодов.",
+                "Сохранить результаты статического анализа в базу данных?",
                 "Подтверждение сохранения",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Question);
 
             if (dialogResult != DialogResult.Yes)
-            {
                 return;
-            }
 
             try
             {
-                int savedCount = 0;
-                int totalCount = regressionResults.Count;
+                // Создаем форму с возможностью отмены
+                var progressForm = new ProcessingFormWithCancel();
+                bool saveCancelled = false;
 
-                // Показываем прогресс
-                var progressForm = new ProcessingForm();
+                progressForm.CancelRequested += (s, args) =>
+                {
+                    saveCancelled = true;
+                    progressForm.UpdateProgress("Отмена сохранения...", 0);
+                };
+
                 progressForm.Show();
                 progressForm.UpdateProgress("Начинаю сохранение...", 0);
 
+                int savedCount = 0;
+                int totalCount = regressionResults.Count;
+
                 foreach (var result in regressionResults)
                 {
+                    if (saveCancelled)
+                    {
+                        progressForm.UpdateProgress("Сохранение отменено пользователем", 0);
+                        System.Threading.Thread.Sleep(1000);
+                        progressForm.Close();
+                        MessageBox.Show("Сохранение отменено. Данные не сохранены.",
+                            "Информация", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                        return;
+                    }
+
                     try
                     {
-                        // Обновляем прогресс
                         int progress = (savedCount * 100) / Math.Max(1, totalCount);
                         progressForm.UpdateProgress($"Сохранение периода: {result.PeriodName}...", progress);
 
-                        // Получаем ID типа расчета
                         int typeId = _dbService.GetOrCreateCalculationType("Расчет статических зависимостей");
 
                         var staticCalc = new StaticCalculationDb
                         {
                             TypeId = typeId,
                             CalculationName = $"{result.PeriodName} - статический анализ",
-                            CalculationDate = DateTime.Now, // ← ВАЖНО: добавляем дату!
+                            CalculationDate = DateTime.Now,
                             KLinear = result.LinearSlope,
                             BLinear = result.LinearIntercept,
                             LExponential = result.ExponentialIntensity
                         };
 
-                        // Сохраняем в БД
                         int staticId = _dbService.SaveStaticCalculation(staticCalc, askConfirmation: false);
 
                         if (staticId > 0)
-                        {
                             savedCount++;
-                            System.Diagnostics.Debug.WriteLine($"Сохранен статический анализ: {result.PeriodName}, ID: {staticId}");
-                        }
 
-                        // Небольшая задержка для отображения прогресса
                         System.Threading.Thread.Sleep(50);
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"Ошибка сохранения периода '{result.PeriodName}': {ex.Message}");
-                        // Продолжаем сохранение других периодов
+                        System.Diagnostics.Debug.WriteLine($"Ошибка сохранения периода: {ex.Message}");
                     }
                 }
 
@@ -141,34 +148,20 @@ namespace WindowsFormsApp1
 
                 if (savedCount > 0)
                 {
-                    MessageBox.Show(
-                        $"Успешно сохранено {savedCount} из {totalCount} результатов статического анализа.\n\n" +
-                        $"Данные сохранены в таблицу calculations_static.",
-                        "Успешно",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information);
+                    MessageBox.Show($"Успешно сохранено {savedCount} из {totalCount} результатов.",
+                        "Успешно", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-                    // После успешного сохранения обновляем кнопку
                     if (btnSaveToDb != null)
                     {
                         btnSaveToDb.Enabled = false;
                         btnSaveToDb.BackColor = Color.LightGray;
                         btnSaveToDb.Text = "✓ Уже сохранено";
-                        btnSaveToDb.Font = new Font(btnSaveToDb.Font, FontStyle.Bold);
                     }
-                }
-                else
-                {
-                    MessageBox.Show(
-                        "Не удалось сохранить ни один результат.\nПроверьте подключение к базе данных.",
-                        "Ошибка",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Критическая ошибка при сохранении в БД:\n\n{ex.Message}",
+                MessageBox.Show($"Ошибка при сохранении:\n\n{ex.Message}",
                     "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

@@ -91,7 +91,7 @@ namespace WindowsFormsApp1
                 int totalCount = regressionResults.Count;
 
                 // Показываем прогресс
-                var progressForm = new ProcessingForm();
+                var progressForm = new ProcessingFormWithCancel();
                 progressForm.Show();
                 progressForm.UpdateProgress("Начинаю сохранение...", 0);
 

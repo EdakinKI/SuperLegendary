@@ -134,11 +134,11 @@
     <Compile Include="MainMenuForm.Designer.cs">
       <DependentUpon>MainMenuForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="ProcessingForm.cs">
+    <Compile Include="ProcessingFormWithCancel.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="ProcessingForm.Designer.cs">
-      <DependentUpon>ProcessingForm.cs</DependentUpon>
+    <Compile Include="ProcessingFormWithCancel.Designer.cs">
+      <DependentUpon>ProcessingFormWithCancel.cs</DependentUpon>
     </Compile>
     <Compile Include="RegressionForm.cs">
       <SubType>Form</SubType>

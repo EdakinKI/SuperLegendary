@@ -8,6 +8,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace WindowsFormsApp1
@@ -281,9 +282,20 @@ namespace WindowsFormsApp1
 
         private void LoadTemperatureData(string filePath)
         {
+            CancellationTokenSource cts = null;
+            ProcessingFormWithCancel progressForm = null;
+
             try
             {
+                // Создаем форму прогресса
+                cts = new CancellationTokenSource();
+                progressForm = new ProcessingFormWithCancel();
+                progressForm.Show();
+                Application.DoEvents();
+
                 System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+
+                progressForm.UpdateProgress("Чтение файла температуры...", 10);
 
                 using (var stream = File.Open(filePath, FileMode.Open, FileAccess.Read))
                 using (var reader = ExcelReaderFactory.CreateReader(stream))
@@ -298,12 +310,31 @@ namespace WindowsFormsApp1
 
                     if (result.Tables.Count > 0)
                     {
+                        progressForm.UpdateProgress("Парсинг данных температуры...", 30);
+
+                        if (cts.Token.IsCancellationRequested)
+                        {
+                            progressForm.SetProcessing(false);
+                            return;
+                        }
+
                         allTemperatureData = new List<HourlyData>();
 
                         // Обрабатываем все листы
-                        foreach (DataTable sheet in result.Tables)
+                        for (int sheetIndex = 0; sheetIndex < result.Tables.Count; sheetIndex++)
                         {
-                            var sheetTemperatures = ParseTemperatureData(sheet);
+                            if (cts.Token.IsCancellationRequested)
+                            {
+                                progressForm.SetProcessing(false);
+                                return;
+                            }
+
+                            int progress = 30 + (sheetIndex * 20) / Math.Max(1, result.Tables.Count);
+                            progressForm.UpdateProgress($"Обработка листа {sheetIndex + 1} из {result.Tables.Count}...", progress);
+
+                            DataTable sheet = result.Tables[sheetIndex];
+                            var sheetTemperatures = ParseTemperatureDataWithProgress(sheet, progressForm, cts);
+
                             if (sheetTemperatures != null && sheetTemperatures.Count > 0)
                             {
                                 allTemperatureData.AddRange(sheetTemperatures);
@@ -312,6 +343,14 @@ namespace WindowsFormsApp1
 
                         if (allTemperatureData.Count > 0)
                         {
+                            progressForm.UpdateProgress("Сортировка данных...", 60);
+
+                            if (cts.Token.IsCancellationRequested)
+                            {
+                                progressForm.SetProcessing(false);
+                                return;
+                            }
+
                             // Сортируем по дате
                             allTemperatureData = allTemperatureData.OrderBy(t => t.DateTime).ToList();
 
@@ -321,6 +360,9 @@ namespace WindowsFormsApp1
                             MatchDataByMinCount();
                             UpdateUIState();
                             DisplayDataPreview();
+
+                            progressForm.UpdateProgress("Готово!", 100);
+                            Thread.Sleep(500);
                         }
                         else
                         {
@@ -335,6 +377,13 @@ namespace WindowsFormsApp1
                 MessageBox.Show($"Ошибка при чтении файла температуры:\n\n{ex.Message}", "Ошибка",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
                 UpdateUIState();
+            }
+            finally
+            {
+                if (progressForm != null)
+                {
+                    progressForm.SetProcessing(false);
+                }
             }
         }
 
@@ -398,7 +447,9 @@ namespace WindowsFormsApp1
             Debug.WriteLine($"Диапазон: {commonStart:dd.MM.yyyy HH:mm} - {commonEnd:dd.MM.yyyy HH:mm}");
         }
 
-        private List<HourlyData> ParseTemperatureData(DataTable data)
+        private List<HourlyData> ParseTemperatureDataWithProgress(DataTable data,
+                                                         ProcessingFormWithCancel progressForm,
+                                                         CancellationTokenSource cts)
         {
             var temperatures = new List<HourlyData>();
 
@@ -409,9 +460,24 @@ namespace WindowsFormsApp1
                 int currentMonth = 1;
                 int currentDay = 1;
 
+                int totalRows = data.Rows.Count;
+
                 // Парсим построчно
-                for (int rowIndex = 0; rowIndex < data.Rows.Count; rowIndex++)
+                for (int rowIndex = 0; rowIndex < totalRows; rowIndex++)
                 {
+                    // Проверяем отмену каждые 100 строк
+                    if (rowIndex % 100 == 0 && cts.Token.IsCancellationRequested)
+                    {
+                        return new List<HourlyData>();
+                    }
+
+                    // Обновляем прогресс каждые 1000 строк
+                    if (rowIndex % 1000 == 0)
+                    {
+                        int progress = (rowIndex * 100) / Math.Max(1, totalRows);
+                        progressForm.UpdateProgress($"Обработка строк {rowIndex + 1} из {totalRows}...", progress);
+                    }
+
                     var row = data.Rows[rowIndex];
 
                     // 1. Проверяем столбец A - ГОД
@@ -486,9 +552,6 @@ namespace WindowsFormsApp1
                                             Hour = hour,
                                             Value = Math.Round(temperature, 1)
                                         });
-
-                                        // Логируем для отладки
-                                        Debug.WriteLine($"Температура: {dateTime.Value:dd.MM.yyyy HH:mm} = {temperature}°C");
                                     }
                                 }
                             }
@@ -499,7 +562,7 @@ namespace WindowsFormsApp1
                 Debug.WriteLine($"=== Найдено {temperatures.Count} температур по часам ===");
 
                 // Теперь для каждого дня, где есть температуры, интерполируем недостающие часы
-                return InterpolateMissingHours(temperatures);
+                return InterpolateMissingHoursWithProgress(temperatures, progressForm, cts);
             }
             catch (Exception ex)
             {
@@ -510,7 +573,9 @@ namespace WindowsFormsApp1
         }
 
         // Метод для интерполяции недостающих часов
-        private List<HourlyData> InterpolateMissingHours(List<HourlyData> hourlyTemperatures)
+        private List<HourlyData> InterpolateMissingHoursWithProgress(List<HourlyData> hourlyTemperatures,
+                                                             ProcessingFormWithCancel progressForm,
+                                                             CancellationTokenSource cts)
         {
             var allTemperatures = new List<HourlyData>();
 
@@ -520,12 +585,27 @@ namespace WindowsFormsApp1
             // Группируем по дням
             var dailyGroups = hourlyTemperatures
                 .GroupBy(t => t.DateTime.Date)
-                .OrderBy(g => g.Key);
+                .OrderBy(g => g.Key)
+                .ToList();
 
-            foreach (var dayGroup in dailyGroups)
+            int totalDays = dailyGroups.Count;
+
+            for (int dayIndex = 0; dayIndex < totalDays; dayIndex++)
             {
+                // Проверяем отмену
+                if (cts != null && cts.Token.IsCancellationRequested)
+                {
+                    progressForm.UpdateProgress("Операция прервана пользователем", 0);
+                    return new List<HourlyData>();
+                }
+
+                var dayGroup = dailyGroups[dayIndex];
                 var dayDate = dayGroup.Key;
                 var dayTemps = dayGroup.OrderBy(t => t.Hour).ToList();
+
+                // Обновляем прогресс
+                int progress = (dayIndex * 100) / Math.Max(1, totalDays);
+                progressForm.UpdateProgress($"Интерполяция температуры: день {dayIndex + 1} из {totalDays}", progress);
 
                 Debug.WriteLine($"День {dayDate:dd.MM.yyyy}: {dayTemps.Count} измерений");
 
@@ -598,6 +678,9 @@ namespace WindowsFormsApp1
                         });
                     }
                 }
+
+                // Небольшая пауза для отображения прогресса
+                Thread.Sleep(10);
             }
 
             return allTemperatures.OrderBy(t => t.DateTime).ToList();
@@ -660,28 +743,13 @@ namespace WindowsFormsApp1
 
         private void BtnAnalyze_Click(object sender, EventArgs e)
         {
+            CancellationTokenSource cts = null;
+            ProcessingFormWithCancel progressForm = null;
+
             try
             {
                 // ОТЛАДКА: проверяем данные перед обработкой
                 System.Diagnostics.Debug.WriteLine("=== НАЧАЛО АНАЛИЗА ===");
-                System.Diagnostics.Debug.WriteLine($"matchedData: {(matchedData == null ? "null" : matchedData.Count.ToString())} точек");
-
-                if (matchedData != null && matchedData.Count > 0)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Диапазон дат: {matchedData.Min(d => d.DateTime):dd.MM.yyyy HH:mm} - {matchedData.Max(d => d.DateTime):dd.MM.yyyy HH:mm}");
-
-                    // Проверяем наличие PowerValue
-                    int withPower = matchedData.Count(d => d.PowerValue.HasValue);
-                    int withoutPower = matchedData.Count(d => !d.PowerValue.HasValue);
-                    System.Diagnostics.Debug.WriteLine($"С PowerValue: {withPower}, без PowerValue: {withoutPower}");
-
-                    if (withPower == 0)
-                    {
-                        MessageBox.Show("Нет данных с мощностью для анализа", "Ошибка",
-                            MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        return;
-                    }
-                }
 
                 if (matchedData == null || matchedData.Count < 4)
                 {
@@ -690,8 +758,9 @@ namespace WindowsFormsApp1
                     return;
                 }
 
-                // Показываем диалог прогресса
-                var progressForm = new ProcessingForm();
+                // Создаем форму прогресса
+                cts = new CancellationTokenSource();
+                progressForm = new ProcessingFormWithCancel();
                 progressForm.Show();
                 Application.DoEvents();
 
@@ -699,61 +768,59 @@ namespace WindowsFormsApp1
                 {
                     progressForm.UpdateProgress("Разделение данных на периоды...", 10);
 
+                    // Проверяем отмену
+                    if (cts.Token.IsCancellationRequested)
+                    {
+                        progressForm.SetProcessing(false);
+                        return;
+                    }
+
                     // 1. Сначала убедимся, что у нас есть PowerValue
                     var validData = matchedData.Where(d => d.PowerValue.HasValue).ToList();
-                    System.Diagnostics.Debug.WriteLine($"Данных с мощностью: {validData.Count}");
 
                     if (validData.Count < 4)
                     {
-                        progressForm.Close();
                         MessageBox.Show($"Недостаточно данных с мощностью. Только {validData.Count} точек",
                             "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        progressForm.SetProcessing(false);
                         return;
                     }
 
                     // 2. Разделяем данные на осенне-зимние периоды
                     var dataPeriods = SplitIntoAutumnWinterPeriods(validData);
 
-                    if (dataPeriods.Count == 0)
-                    {
-                        // Если не удалось создать периоды, используем все данные как один период
-                        System.Diagnostics.Debug.WriteLine("Не удалось создать периоды, используем все данные как один период");
-
-                        var fallbackPeriod = new DataPeriod
-                        {
-                            Name = "Все данные",
-                            StartYear = validData.Min(d => d.DateTime.Year),
-                            EndYear = validData.Max(d => d.DateTime.Year),
-                            PeriodStart = validData.Min(d => d.DateTime),
-                            PeriodEnd = validData.Max(d => d.DateTime),
-                            Data = validData
-                        };
-
-                        dataPeriods.Add(fallbackPeriod);
-                    }
-
                     progressForm.UpdateProgress($"Найдено {dataPeriods.Count} периода(ов)", 20);
-                    System.Diagnostics.Debug.WriteLine($"Создано периодов: {dataPeriods.Count}");
+
+                    // Проверяем отмену
+                    if (cts.Token.IsCancellationRequested)
+                    {
+                        progressForm.SetProcessing(false);
+                        return;
+                    }
 
                     // 3. Обрабатываем каждый период отдельно
                     var processedPeriods = new List<DataPeriod>();
 
                     for (int i = 0; i < dataPeriods.Count; i++)
                     {
+                        // Проверяем отмену
+                        if (cts.Token.IsCancellationRequested)
+                        {
+                            progressForm.SetProcessing(false);
+                            return;
+                        }
+
                         var period = dataPeriods[i];
                         int progress = 20 + (i * 70 / Math.Max(1, dataPeriods.Count));
 
-                        progressForm.UpdateProgress($"Обработка периода: {period.Name}...", progress);
-                        System.Diagnostics.Debug.WriteLine($"Обработка периода {period.Name}: {period.Data.Count} точек");
+                        progressForm.UpdateProgress($"Обработка периода: {period.Name} ({i + 1}/{dataPeriods.Count})...", progress);
 
                         // Проверяем, что в периоде достаточно данных
                         if (period.Data.Count < 4)
                         {
-                            System.Diagnostics.Debug.WriteLine($"Пропущен период '{period.Name}': недостаточно данных ({period.Data.Count})");
                             continue;
                         }
 
-                        // Применяем Фурье (опционально, можно закомментировать для отладки)
                         try
                         {
                             // Разделяем данные периода
@@ -771,22 +838,30 @@ namespace WindowsFormsApp1
                                 Value = d.Value
                             }).ToList();
 
-                            // Можно заменить на это, чтобы без Фурье, тогда будут точки класс
-                            // var filteredPowerData = periodPowerData;
-                            // var filteredTempData = periodTempData;
-                            // Применяем Фурье
-                            // cutoffRatio - сила сглаживание, чем меньше, тем сильнее
-                            double cutoffRatio = 0.1;
-                            var filteredPowerData = FourierProcessor.ProcessPowerData(periodPowerData, cutoffRatio);
-                            var filteredTempData = FourierProcessor.ProcessTemperatureData(periodTempData, cutoffRatio);
+                            // Применяем Фурье с поддержкой прогресса
+                            progressForm.UpdateProgress($"Применение Фурье-фильтра...", progress + 5);
 
-                            // Проверяем длины
-                            if (filteredPowerData.Count != periodPowerData.Count ||
-                                filteredTempData.Count != periodTempData.Count)
+                            double cutoffRatio = 0.1;
+                            var filteredPowerData = ClassLibrary1.FourierProcessor.ProcessPowerDataWithProgress(
+                                                    periodPowerData, cutoffRatio, progressForm, cts);
+
+                            // Проверяем отмену
+                            if (cts.Token.IsCancellationRequested || filteredPowerData == null)
                             {
-                                System.Diagnostics.Debug.WriteLine($"ОШИБКА Фурье: длины не совпадают. Используем оригинальные данные.");
-                                processedPeriods.Add(period);
-                                continue;
+                                progressForm.SetProcessing(false);
+                                return;
+                            }
+
+                            progressForm.UpdateProgress($"Применение Фурье-фильтра (температура)...", progress + 10);
+
+                            var filteredTempData = ClassLibrary1.FourierProcessor.ProcessTemperatureDataWithProgress(
+                                                    periodTempData, cutoffRatio, progressForm, cts);
+
+                            // Проверяем отмену
+                            if (cts.Token.IsCancellationRequested || filteredTempData == null)
+                            {
+                                progressForm.SetProcessing(false);
+                                return;
                             }
 
                             // Сопоставляем отфильтрованные данные
@@ -812,9 +887,6 @@ namespace WindowsFormsApp1
                                 PeriodEnd = period.PeriodEnd,
                                 Data = filteredMatchedData
                             });
-
-                            System.Diagnostics.Debug.WriteLine($"Обработан период '{period.Name}': {filteredMatchedData.Count} точек");
-
                         }
                         catch (Exception ex)
                         {
@@ -827,40 +899,92 @@ namespace WindowsFormsApp1
                     // Проверяем, что есть обработанные периоды
                     if (processedPeriods.Count == 0)
                     {
-                        progressForm.Close();
                         MessageBox.Show("Нет данных для построения графиков",
                             "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        progressForm.SetProcessing(false);
                         return;
+                    }
+
+                    progressForm.UpdateProgress("Аппроксимация данных...", 90);
+
+                    // Проверяем отмену
+                    if (cts.Token.IsCancellationRequested)
+                    {
+                        progressForm.SetProcessing(false);
+                        return;
+                    }
+
+                    // 4. Выполняем регрессионный анализ
+                    var regressionResults = new List<ClassLibrary1.RegressionResult>();
+
+                    for (int i = 0; i < processedPeriods.Count; i++)
+                    {
+                        // Проверяем отмену
+                        if (cts != null && cts.Token.IsCancellationRequested)
+                        {
+                            progressForm.SetProcessing(false);
+                            return;
+                        }
+
+                        var period = processedPeriods[i];
+
+                        // Обновляем прогресс для регрессии
+                        int regressionProgress = 90 + (i * 5) / Math.Max(1, processedPeriods.Count);
+                        progressForm.UpdateProgress($"Аппроксимация периода: {period.Name} ({i + 1}/{processedPeriods.Count})...",
+                                                   Math.Min(90 + regressionProgress, 98));
+
+                        try
+                        {
+                            // Собираем данные для регрессии
+                            var temperatures = period.Data.Select(d => d.Value).ToList();
+                            var powers = period.Data.Select(d => d.PowerValue.Value).ToList();
+
+                            // ВАЖНО: Используйте ваш существующий класс RegressionCalculator!
+                            var result = ClassLibrary1.RegressionCalculator.CalculateRegressions(
+                                period.Name, temperatures, powers);
+
+                            if (result != null && result.Temperatures.Count > 0)
+                            {
+                                regressionResults.Add(result);
+                                System.Diagnostics.Debug.WriteLine($"Регрессия для периода '{period.Name}' успешно рассчитана");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Debug.WriteLine($"Не удалось рассчитать регрессию для периода '{period.Name}'");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Ошибка регрессии для периода '{period.Name}': {ex.Message}");
+                        }
                     }
 
                     progressForm.UpdateProgress("Построение графика...", 95);
 
-                    // 4. Показываем форму с графиками
-                    System.Diagnostics.Debug.WriteLine($"Открываем ChartForm с {processedPeriods.Count} периодами");
+                    // 5. Показываем форму с графиками
+                    progressForm.SetProcessing(false);
 
-                    var chartForm = new ChartForm(processedPeriods, true);
-                    progressForm.UpdateProgress("Готово!", 100);
-                    System.Threading.Thread.Sleep(300);
-
-                    progressForm.Close();
-                    chartForm.ShowDialog();
+                    if (regressionResults.Count > 0)
+                    {
+                        var regressionForm = new RegressionFormDB(regressionResults);
+                        regressionForm.ShowDialog();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Не удалось выполнить регрессионный анализ",
+                            "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
                 }
                 catch (Exception ex)
                 {
-                    progressForm.Close();
-                    System.Diagnostics.Debug.WriteLine($"Ошибка BtnAnalyze_Click (внутренняя): {ex.Message}\n{ex.StackTrace}");
-                    MessageBox.Show($"Ошибка при обработке данных:\n{ex.Message}\n\nПодробности в Debug Output", "Ошибка",
+                    progressForm.SetProcessing(false);
+                    MessageBox.Show($"Ошибка при обработке данных:\n{ex.Message}", "Ошибка",
                         MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка BtnAnalyze_Click (внешняя): {ex.Message}\n{ex.StackTrace}");
-                
-            }
-            finally
-            {
-                System.Diagnostics.Debug.WriteLine("=== КОНЕЦ АНАЛИЗА ===");
+                System.Diagnostics.Debug.WriteLine($"Ошибка BtnAnalyze_Click: {ex.Message}\n{ex.StackTrace}");
             }
         }
 

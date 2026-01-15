@@ -173,8 +173,7 @@ namespace WindowsFormsApp1
                     var temperatures = validData.Select(d => d.Value).ToList();
                     var powers = validData.Select(d => d.PowerValue.Value).ToList();
 
-                    var result = RegressionCalculator.CalculateRegressions(
-                        period.Name, temperatures, powers);
+                    var result = RegressionCalculator.CalculateRegressions(period.Name, temperatures, powers);
 
                     if (result.Temperatures.Count > 0)
                     {

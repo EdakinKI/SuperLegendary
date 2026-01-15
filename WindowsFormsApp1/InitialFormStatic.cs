@@ -134,7 +134,7 @@ namespace WindowsFormsApp1
                     return SplitIntoMonthlyFourierPeriods(allData);
                 case "Осенне-зимние периоды (Сен-Май)":
                 default:
-                    return SplitIntoAutumnWinterFourierPeriods(allData);
+                    return SplitIntoAutumnWinterPeriods(allData);
             }
         }
 
@@ -1036,12 +1036,12 @@ namespace WindowsFormsApp1
                         return;
                     }
 
-                    progressForm.UpdateProgress("Разделение данных на осенне-зимние периоды...", 20);
+                    progressForm.UpdateProgress("Разделение на осенне-зимние периоды...", 20);
 
-                    // 2. Разделяем данные на осенне-зимние периоды (как и раньше, для регрессии)
-                    var autumnWinterPeriods = SplitIntoAutumnWinterFourierPeriods(validData);
+                    // 2. Разделяем данные на осенне-зимние периоды (Сентябрь-Май)
+                    var autumnWinterPeriods = SplitIntoAutumnWinterPeriods(validData);
 
-                    progressForm.UpdateProgress($"Найдено {autumnWinterPeriods.Count} осенне-зимних периода(ов)", 25);
+                    progressForm.UpdateProgress($"Найдено {autumnWinterPeriods.Count} осенне-зимних периода(ов)", 30);
 
                     // Проверяем отмену
                     if (cts.Token.IsCancellationRequested)
@@ -1063,9 +1063,9 @@ namespace WindowsFormsApp1
                         }
 
                         var period = autumnWinterPeriods[i];
-                        int progress = 25 + (i * 50 / Math.Max(1, autumnWinterPeriods.Count));
+                        int progress = 30 + (i * 50 / Math.Max(1, autumnWinterPeriods.Count));
 
-                        progressForm.UpdateProgress($"Обработка периода: {period.Name} ({i + 1}/{autumnWinterPeriods.Count})...", progress);
+                        progressForm.UpdateProgress($"Обработка осенне-зимнего периода: {period.Name} ({i + 1}/{autumnWinterPeriods.Count})...", progress);
 
                         // Проверяем, что в периоде достаточно данных
                         if (period.Data.Count < 4)
@@ -1161,20 +1161,14 @@ namespace WindowsFormsApp1
                         return;
                     }
 
-                    progressForm.UpdateProgress("Открытие окна с маркерами...", 80);
+                    progressForm.UpdateProgress("Открытие окна с маркерами...", 85);
 
-                    // 4. Показываем форму с маркерами (ChartForm)
-                    // Здесь нужно создать ChartForm, которая покажет маркеры после Фурье
-                    // и будет иметь кнопку "Аппроксимировать"
-
+                    // 4. Показываем форму с маркерами
                     progressForm.SetProcessing(false);
 
                     // Создаем и показываем форму с маркерами
                     var chartForm = new ChartForm(processedPeriods, true);
                     chartForm.ShowDialog();
-
-                    // Когда пользователь нажмет "Аппроксимировать" в ChartForm,
-                    // откроется RegressionFormDB с результатами регрессии
 
                 }
                 catch (Exception ex)
@@ -1195,27 +1189,125 @@ namespace WindowsFormsApp1
         }
 
         /// <summary>
-        /// Разделяет данные на осенне-зимние периоды для Фурье
+        /// Разделяет данные на осенне-зимние периоды (Сентябрь-Май)
         /// </summary>
-        private List<DataPeriod> SplitIntoAutumnWinterFourierPeriods(List<HourlyData> allData)
+        private List<DataPeriod> SplitIntoAutumnWinterPeriods(List<HourlyData> allData)
         {
             var periods = new List<DataPeriod>();
 
             if (allData == null || allData.Count == 0)
-                return periods;
-
-            // Просто возвращаем все данные как один период
-            periods.Add(new DataPeriod
             {
-                Name = "Весь период",
-                StartYear = allData.Min(d => d.DateTime).Year,
-                EndYear = allData.Max(d => d.DateTime).Year,
-                PeriodStart = allData.Min(d => d.DateTime),
-                PeriodEnd = allData.Max(d => d.DateTime),
-                Data = allData.OrderBy(d => d.DateTime).ToList()
-            });
+                System.Diagnostics.Debug.WriteLine("SplitIntoAutumnWinterPeriods: allData пуст или null");
+                return periods;
+            }
 
-            System.Diagnostics.Debug.WriteLine($"Создан 1 общий период для Фурье");
+            System.Diagnostics.Debug.WriteLine($"SplitIntoAutumnWinterPeriods: всего {allData.Count} точек");
+
+            // Находим диапазон дат
+            DateTime minDate = allData.Min(d => d.DateTime);
+            DateTime maxDate = allData.Max(d => d.DateTime);
+
+            // Для каждого осенне-зимнего периода (сентябрь-май)
+            var years = allData.Select(d => d.DateTime.Year).Distinct().OrderBy(y => y).ToList();
+
+            foreach (int year in years)
+            {
+                int nextYear = year + 1;
+
+                // Собираем данные для периода: сентябрь-декабрь текущего года + январь-май следующего
+                List<HourlyData> periodData = new List<HourlyData>();
+
+                // Текущий год: сентябрь-декабрь
+                for (int month = 9; month <= 12; month++)
+                {
+                    var monthData = allData.Where(d =>
+                        d.DateTime.Year == year &&
+                        d.DateTime.Month == month).ToList();
+
+                    if (monthData.Count > 0)
+                    {
+                        periodData.AddRange(monthData);
+                    }
+                }
+
+                // Следующий год: январь-май
+                for (int month = 1; month <= 5; month++)
+                {
+                    var monthData = allData.Where(d =>
+                        d.DateTime.Year == nextYear &&
+                        d.DateTime.Month == month).ToList();
+
+                    if (monthData.Count > 0)
+                    {
+                        periodData.AddRange(monthData);
+                    }
+                }
+
+                // Если в периоде достаточно данных
+                if (periodData.Count >= 24) // Минимум 1 день данных (24 часа)
+                {
+                    // Сортируем по дате
+                    periodData = periodData.OrderBy(d => d.DateTime).ToList();
+
+                    // Определяем фактические границы периода
+                    DateTime actualStart = periodData.Min(d => d.DateTime);
+                    DateTime actualEnd = periodData.Max(d => d.DateTime);
+
+                    var period = new DataPeriod
+                    {
+                        Name = $"Период {year}-{nextYear} (Сен-Май)",
+                        StartYear = year,
+                        EndYear = nextYear,
+                        PeriodStart = actualStart,
+                        PeriodEnd = actualEnd,
+                        Data = periodData
+                    };
+
+                    periods.Add(period);
+
+                    System.Diagnostics.Debug.WriteLine($"Создан период {period.Name}: " +
+                        $"{periodData.Count} точек, " +
+                        $"{actualStart:dd.MM.yyyy} - {actualEnd:dd.MM.yyyy}");
+                }
+            }
+
+            // Если не нашли полных периодов, создаем периоды по годам
+            if (periods.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("Создаем упрощенные периоды по годам...");
+
+                foreach (int year in years)
+                {
+                    var yearData = allData.Where(d => d.DateTime.Year == year).ToList();
+
+                    if (yearData.Count >= 24) // Минимум 1 день
+                    {
+                        // Оставляем только данные с сентября по май
+                        var filteredData = yearData.Where(d =>
+                            d.DateTime.Month >= 9 || d.DateTime.Month <= 5).ToList();
+
+                        if (filteredData.Count >= 24)
+                        {
+                            DateTime startDate = filteredData.Min(d => d.DateTime);
+                            DateTime endDate = filteredData.Max(d => d.DateTime);
+
+                            var period = new DataPeriod
+                            {
+                                Name = $"Год {year} (Сен-Май)",
+                                StartYear = year,
+                                EndYear = year,
+                                PeriodStart = startDate,
+                                PeriodEnd = endDate,
+                                Data = filteredData.OrderBy(d => d.DateTime).ToList()
+                            };
+
+                            periods.Add(period);
+                        }
+                    }
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"Всего создано периодов: {periods.Count}");
             return periods;
         }
 

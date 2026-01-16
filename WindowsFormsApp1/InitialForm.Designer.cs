@@ -77,9 +77,9 @@
             // 
             this.cmbCalculationType.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cmbCalculationType.FormattingEnabled = true;
-            this.cmbCalculationType.Location = new System.Drawing.Point(103, 17);
+            this.cmbCalculationType.Location = new System.Drawing.Point(227, 17);
             this.cmbCalculationType.Name = "cmbCalculationType";
-            this.cmbCalculationType.Size = new System.Drawing.Size(250, 24);
+            this.cmbCalculationType.Size = new System.Drawing.Size(258, 24);
             this.cmbCalculationType.TabIndex = 1;
             // 
             // lblSystem
@@ -95,9 +95,9 @@
             // 
             this.cmbSystems.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cmbSystems.FormattingEnabled = true;
-            this.cmbSystems.Location = new System.Drawing.Point(127, 47);
+            this.cmbSystems.Location = new System.Drawing.Point(227, 47);
             this.cmbSystems.Name = "cmbSystems";
-            this.cmbSystems.Size = new System.Drawing.Size(250, 24);
+            this.cmbSystems.Size = new System.Drawing.Size(258, 24);
             this.cmbSystems.TabIndex = 3;
             // 
             // lblParamSet
@@ -113,15 +113,15 @@
             // 
             this.cmbParamSets.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.cmbParamSets.FormattingEnabled = true;
-            this.cmbParamSets.Location = new System.Drawing.Point(187, 77);
+            this.cmbParamSets.Location = new System.Drawing.Point(227, 77);
             this.cmbParamSets.Name = "cmbParamSets";
-            this.cmbParamSets.Size = new System.Drawing.Size(250, 24);
+            this.cmbParamSets.Size = new System.Drawing.Size(258, 24);
             this.cmbParamSets.TabIndex = 5;
             // 
             // lblT1
             // 
             this.lblT1.AutoSize = true;
-            this.lblT1.Location = new System.Drawing.Point(12, 110);
+            this.lblT1.Location = new System.Drawing.Point(15, 155);
             this.lblT1.Name = "lblT1";
             this.lblT1.Size = new System.Drawing.Size(50, 16);
             this.lblT1.TabIndex = 6;
@@ -129,7 +129,7 @@
             // 
             // txtT1
             // 
-            this.txtT1.Location = new System.Drawing.Point(94, 107);
+            this.txtT1.Location = new System.Drawing.Point(90, 152);
             this.txtT1.Name = "txtT1";
             this.txtT1.Size = new System.Drawing.Size(100, 22);
             this.txtT1.TabIndex = 7;
@@ -137,7 +137,7 @@
             // lblT2
             // 
             this.lblT2.AutoSize = true;
-            this.lblT2.Location = new System.Drawing.Point(200, 110);
+            this.lblT2.Location = new System.Drawing.Point(224, 155);
             this.lblT2.Name = "lblT2";
             this.lblT2.Size = new System.Drawing.Size(50, 16);
             this.lblT2.TabIndex = 8;
@@ -145,15 +145,15 @@
             // 
             // txtT2
             // 
-            this.txtT2.Location = new System.Drawing.Point(282, 107);
+            this.txtT2.Location = new System.Drawing.Point(380, 152);
             this.txtT2.Name = "txtT2";
-            this.txtT2.Size = new System.Drawing.Size(100, 22);
+            this.txtT2.Size = new System.Drawing.Size(105, 22);
             this.txtT2.TabIndex = 9;
             // 
             // lblP1
             // 
             this.lblP1.AutoSize = true;
-            this.lblP1.Location = new System.Drawing.Point(12, 140);
+            this.lblP1.Location = new System.Drawing.Point(15, 191);
             this.lblP1.Name = "lblP1";
             this.lblP1.Size = new System.Drawing.Size(64, 16);
             this.lblP1.TabIndex = 10;
@@ -161,15 +161,15 @@
             // 
             // txtP1
             // 
-            this.txtP1.Location = new System.Drawing.Point(102, 137);
+            this.txtP1.Location = new System.Drawing.Point(90, 185);
             this.txtP1.Name = "txtP1";
-            this.txtP1.Size = new System.Drawing.Size(120, 22);
+            this.txtP1.Size = new System.Drawing.Size(100, 22);
             this.txtP1.TabIndex = 11;
             // 
             // lblE1
             // 
             this.lblE1.AutoSize = true;
-            this.lblE1.Location = new System.Drawing.Point(228, 140);
+            this.lblE1.Location = new System.Drawing.Point(224, 191);
             this.lblE1.Name = "lblE1";
             this.lblE1.Size = new System.Drawing.Size(101, 16);
             this.lblE1.TabIndex = 12;
@@ -177,15 +177,15 @@
             // 
             // txtE1
             // 
-            this.txtE1.Location = new System.Drawing.Point(365, 137);
+            this.txtE1.Location = new System.Drawing.Point(380, 185);
             this.txtE1.Name = "txtE1";
-            this.txtE1.Size = new System.Drawing.Size(120, 22);
+            this.txtE1.Size = new System.Drawing.Size(105, 22);
             this.txtE1.TabIndex = 13;
             // 
             // lblForecastDate
             // 
             this.lblForecastDate.AutoSize = true;
-            this.lblForecastDate.Location = new System.Drawing.Point(12, 170);
+            this.lblForecastDate.Location = new System.Drawing.Point(17, 113);
             this.lblForecastDate.Name = "lblForecastDate";
             this.lblForecastDate.Size = new System.Drawing.Size(107, 16);
             this.lblForecastDate.TabIndex = 14;
@@ -193,14 +193,14 @@
             // 
             // dtpForecastDate
             // 
-            this.dtpForecastDate.Location = new System.Drawing.Point(113, 167);
+            this.dtpForecastDate.Location = new System.Drawing.Point(227, 113);
             this.dtpForecastDate.Name = "dtpForecastDate";
-            this.dtpForecastDate.Size = new System.Drawing.Size(150, 22);
+            this.dtpForecastDate.Size = new System.Drawing.Size(258, 22);
             this.dtpForecastDate.TabIndex = 15;
             // 
             // btnCalculate
             // 
-            this.btnCalculate.Location = new System.Drawing.Point(300, 165);
+            this.btnCalculate.Location = new System.Drawing.Point(15, 237);
             this.btnCalculate.Name = "btnCalculate";
             this.btnCalculate.Size = new System.Drawing.Size(120, 30);
             this.btnCalculate.TabIndex = 16;
@@ -210,7 +210,7 @@
             // gbPowerRanges
             // 
             this.gbPowerRanges.Controls.Add(this.dgvPowerRanges);
-            this.gbPowerRanges.Location = new System.Drawing.Point(12, 210);
+            this.gbPowerRanges.Location = new System.Drawing.Point(12, 290);
             this.gbPowerRanges.Name = "gbPowerRanges";
             this.gbPowerRanges.Size = new System.Drawing.Size(560, 200);
             this.gbPowerRanges.TabIndex = 17;
@@ -234,7 +234,7 @@
             // gbEnergyRanges
             // 
             this.gbEnergyRanges.Controls.Add(this.dgvEnergyRanges);
-            this.gbEnergyRanges.Location = new System.Drawing.Point(12, 420);
+            this.gbEnergyRanges.Location = new System.Drawing.Point(15, 496);
             this.gbEnergyRanges.Name = "gbEnergyRanges";
             this.gbEnergyRanges.Size = new System.Drawing.Size(560, 200);
             this.gbEnergyRanges.TabIndex = 18;
@@ -259,7 +259,7 @@
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(584, 632);
+            this.ClientSize = new System.Drawing.Size(584, 721);
             this.Controls.Add(this.gbEnergyRanges);
             this.Controls.Add(this.gbPowerRanges);
             this.Controls.Add(this.btnCalculate);
@@ -279,6 +279,7 @@
             this.Controls.Add(this.lblSystem);
             this.Controls.Add(this.cmbCalculationType);
             this.Controls.Add(this.lblCalculationType);
+            this.MaximumSize = new System.Drawing.Size(602, 768);
             this.Name = "InitialFormDb";
             this.Text = "Расчет температурных зависимостей";
             this.gbPowerRanges.ResumeLayout(false);

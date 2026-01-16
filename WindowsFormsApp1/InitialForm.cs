@@ -64,59 +64,60 @@ namespace WindowsFormsApp1
 
             // Позиционируем элементы
             int currentY = 10;
-
+            
             // Первая строка: тип расчета
             lblCalculationType.Location = new Point(10, currentY);
             cmbCalculationType.Location = new Point(150, currentY - 3);
             currentY += 35;
-
+            
             // Вторая строка: энергосистема
             lblSystem.Location = new Point(10, currentY);
             cmbSystems.Location = new Point(150, currentY - 3);
             currentY += 35;
-
+            
             // Третья строка: таблица коэффициентов
             lblParamSet.Location = new Point(10, currentY);
             cmbParamSets.Location = new Point(150, currentY - 3);
             currentY += 40;
-
+            
             // Четвертая строка: температуры
             lblT1.Location = new Point(10, currentY);
             txtT1.Location = new Point(70, currentY - 3);
             txtT1.Size = new Size(80, 22);
-
+            
             lblT2.Location = new Point(170, currentY);
             txtT2.Location = new Point(230, currentY - 3);
             txtT2.Size = new Size(80, 22);
             currentY += 35;
-
+            
             // Пятая строка: мощность и электроэнергия
             lblP1.Location = new Point(10, currentY);
             txtP1.Location = new Point(80, currentY - 3);
             txtP1.Size = new Size(100, 22);
-
+            
             lblE1.Location = new Point(200, currentY);
             txtE1.Location = new Point(310, currentY - 3);
             txtE1.Size = new Size(100, 22);
             currentY += 35;
-
+            
             // Шестая строка: дата прогноза и кнопка расчета
             lblForecastDate.Location = new Point(10, currentY);
             dtpForecastDate.Location = new Point(140, currentY - 3);
             dtpForecastDate.Size = new Size(150, 22);
-
+            
             btnCalculate.Location = new Point(310, currentY - 3);
             btnCalculate.Size = new Size(120, 30);
             currentY += 40;
-
+            
             // Позиционируем таблицы ниже (изначально скрыты)
             gbPowerRanges.Location = new Point(10, currentY);
             gbPowerRanges.Size = new Size(560, 180);
             gbPowerRanges.Visible = false;
-
+            
             gbEnergyRanges.Location = new Point(10, currentY + 190);
             gbEnergyRanges.Size = new Size(560, 180);
             gbEnergyRanges.Visible = false;
+
         }
 
         private void InitializeEventHandlers()

@@ -16,9 +16,6 @@ namespace WindowsFormsApp1
         private DatabaseService _dbService = new DatabaseService();
         private DataSet _excelDataSet;
         private Dictionary<string, List<EnergySystem>> _allSystemsBySheet = new Dictionary<string, List<EnergySystem>>();
-        private ComboBox cmbSheetSelector;
-        private DataGridView dgvSystems;
-        private Label lblSheetSelector;
         private string _selectedSheetType = "unknown";
 
         // Ключевые слова для определения типа листа
@@ -38,99 +35,7 @@ namespace WindowsFormsApp1
         public UpdateCoefForm()
         {
             InitializeComponent();
-            ConfigureForm();
             InitializePlaceholderText();
-        }
-
-        private void ConfigureForm()
-        {
-            this.Text = "Обновление коэффициентов влияния";
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
-            this.Size = new Size(900, 700);
-
-            // Скрываем выбор системы и DataGridView из дизайнера
-            cmbSystems.Visible = false;
-            lblSystem.Visible = false;
-            dgvRanges.Visible = false;
-
-            // Добавляем Label для выбора листа
-            lblSheetSelector = new Label
-            {
-                Name = "lblSheetSelector",
-                Location = new Point(12, 105),
-                Size = new Size(120, 20),
-                Text = "Выберите лист:",
-                Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Regular),
-                Visible = false // Изначально скрыт
-            };
-            this.Controls.Add(lblSheetSelector);
-
-            // Добавляем ComboBox для выбора листа
-            cmbSheetSelector = new ComboBox
-            {
-                Name = "cmbSheetSelector",
-                Location = new Point(140, 102),
-                Size = new Size(300, 24),
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Visible = false // Изначально скрыт
-            };
-            cmbSheetSelector.SelectedIndexChanged += CmbSheetSelector_SelectedIndexChanged;
-            this.Controls.Add(cmbSheetSelector);
-
-            // Создаем новый DataGridView для отображения систем
-            dgvSystems = new DataGridView
-            {
-                Location = new Point(12, 170),
-                Size = new Size(860, 350),
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
-                AllowUserToAddRows = false,
-                AllowUserToDeleteRows = false,
-                ReadOnly = true,
-                RowHeadersVisible = false,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
-            };
-            this.Controls.Add(dgvSystems);
-
-            // Добавляем информационную метку
-            var lblInfo = new Label
-            {
-                Location = new Point(12, 530),
-                Size = new Size(860, 40),
-                Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Regular),
-                Text = "Все найденные энергосистемы будут сохранены одновременно."
-            };
-            this.Controls.Add(lblInfo);
-
-            // Перемещаем кнопки вниз
-            btnSave.Location = new Point(684, 580);
-            btnCancel.Location = new Point(780, 580);
-        }
-
-        private void CmbSheetSelector_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            if (cmbSheetSelector.SelectedItem != null)
-            {
-                string selectedSheet = cmbSheetSelector.SelectedItem.ToString();
-                if (_allSystemsBySheet.ContainsKey(selectedSheet))
-                {
-                    DisplaySystemsForSheet(selectedSheet);
-                }
-                else
-                {
-                    // Если данные еще не загружены, загружаем их
-                    DataTable sheetData = _excelDataSet.Tables[selectedSheet];
-                    if (sheetData != null)
-                    {
-                        // Определяем тип листа
-                        string sheetType = DetectSheetType(Path.GetFileNameWithoutExtension(txtFilePath.Text), selectedSheet);
-                        _selectedSheetType = sheetType;
-                        ParseExcelData(sheetData, sheetType);
-                        DisplaySystemsForSheet(selectedSheet);
-                    }
-                }
-            }
         }
 
         private void InitializePlaceholderText()
@@ -212,9 +117,6 @@ namespace WindowsFormsApp1
                             cmbSheetSelector.Visible = true;
                             lblSheetSelector.Visible = true;
 
-                            // Устанавливаем текст для всех найденных листов
-                            lblSheetType.Text = $"Найдено листов: {_excelDataSet.Tables.Count}";
-
                             // Загружаем данные для первого листа по умолчанию
                             if (cmbSheetSelector.Items.Count > 0)
                             {
@@ -230,7 +132,6 @@ namespace WindowsFormsApp1
                             string sheetName = _excelDataSet.Tables[0].TableName;
                             string sheetType = DetectSheetType(Path.GetFileNameWithoutExtension(filePath), sheetName);
                             _selectedSheetType = sheetType;
-                            lblSheetType.Text = $"Тип листа: {GetSheetTypeDisplayName(sheetType)}";
 
                             ParseExcelData(_excelDataSet.Tables[0], sheetType);
                             DisplaySystemsForSheet(sheetName);
@@ -242,6 +143,31 @@ namespace WindowsFormsApp1
             {
                 MessageBox.Show($"Ошибка при чтении файла:\n\n{ex.Message}", "Ошибка",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void CmbSheetSelector_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cmbSheetSelector.SelectedItem != null)
+            {
+                string selectedSheet = cmbSheetSelector.SelectedItem.ToString();
+                if (_allSystemsBySheet.ContainsKey(selectedSheet))
+                {
+                    DisplaySystemsForSheet(selectedSheet);
+                }
+                else
+                {
+                    // Если данные еще не загружены, загружаем их
+                    DataTable sheetData = _excelDataSet.Tables[selectedSheet];
+                    if (sheetData != null)
+                    {
+                        // Определяем тип листа
+                        string sheetType = DetectSheetType(Path.GetFileNameWithoutExtension(txtFilePath.Text), selectedSheet);
+                        _selectedSheetType = sheetType;
+                        ParseExcelData(sheetData, sheetType);
+                        DisplaySystemsForSheet(selectedSheet);
+                    }
+                }
             }
         }
 
@@ -493,8 +419,7 @@ namespace WindowsFormsApp1
             }
 
             // Обновляем заголовок
-            lblTitle.Text = $"Обновление коэффициентов влияния - {sheetName} ({systems.Count} систем)";
-            lblSheetType.Text = $"Тип листа: {typeDisplay}";
+            lblTitle.Text = $"Обновление коэффициентов влияния (Систем: {systems.Count})";
 
             // Активируем кнопку сохранения если есть данные
             btnSave.Enabled = systems.Count > 0 && _selectedSheetType != "unknown";
@@ -647,6 +572,11 @@ namespace WindowsFormsApp1
         private void btnCancel_Click(object sender, EventArgs e)
         {
             this.Close();
+        }
+
+        private void lblSetName_Click(object sender, EventArgs e)
+        {
+
         }
     }
 }

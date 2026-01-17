@@ -13,111 +13,26 @@ namespace WindowsFormsApp1
         private DatabaseService _dbService = new DatabaseService();
         private ForecastParamsDb _selectedParams;
         private List<EnergySystem> _energySystems = new List<EnergySystem>();
-        private Panel contentPanel;
 
         public InitialFormDb()
         {
             InitializeComponent();
-            CreateContentPanel();
-            ConfigureForm();
             InitializeEventHandlers();
             LoadDataFromDatabase();
+            ConfigureVisibility(); // Только управление видимостью
         }
 
-        private void CreateContentPanel()
+        private void ConfigureVisibility()
         {
-            // Создаем панель для содержимого с прокруткой
-            contentPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                AutoScroll = true,
-                Padding = new Padding(10)
-            };
-
-            // Перемещаем все существующие контролы на панель
-            var controls = new List<Control>();
-            foreach (Control control in this.Controls)
-            {
-                controls.Add(control);
-            }
-
-            this.Controls.Clear();
-            this.Controls.Add(contentPanel);
-
-            foreach (var control in controls)
-            {
-                contentPanel.Controls.Add(control);
-            }
-        }
-
-        private void ConfigureForm()
-        {
-            this.Text = "Расчет температурных зависимостей (БД)";
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.FixedSingle;
-            this.MaximizeBox = false;
-            this.Size = new Size(600, 800);
-
             // Изначально скрываем таблицы
             gbPowerRanges.Visible = false;
             gbEnergyRanges.Visible = false;
 
-            // Позиционируем элементы
-            int currentY = 10;
-            
-            // Первая строка: тип расчета
-            lblCalculationType.Location = new Point(10, currentY);
-            cmbCalculationType.Location = new Point(150, currentY - 3);
-            currentY += 35;
-            
-            // Вторая строка: энергосистема
-            lblSystem.Location = new Point(10, currentY);
-            cmbSystems.Location = new Point(150, currentY - 3);
-            currentY += 35;
-            
-            // Третья строка: таблица коэффициентов
-            lblParamSet.Location = new Point(10, currentY);
-            cmbParamSets.Location = new Point(150, currentY - 3);
-            currentY += 40;
-            
-            // Четвертая строка: температуры
-            lblT1.Location = new Point(10, currentY);
-            txtT1.Location = new Point(70, currentY - 3);
-            txtT1.Size = new Size(80, 22);
-            
-            lblT2.Location = new Point(170, currentY);
-            txtT2.Location = new Point(230, currentY - 3);
-            txtT2.Size = new Size(80, 22);
-            currentY += 35;
-            
-            // Пятая строка: мощность и электроэнергия
-            lblP1.Location = new Point(10, currentY);
-            txtP1.Location = new Point(80, currentY - 3);
-            txtP1.Size = new Size(100, 22);
-            
-            lblE1.Location = new Point(200, currentY);
-            txtE1.Location = new Point(310, currentY - 3);
-            txtE1.Size = new Size(100, 22);
-            currentY += 35;
-            
-            // Шестая строка: дата прогноза и кнопка расчета
-            lblForecastDate.Location = new Point(10, currentY);
-            dtpForecastDate.Location = new Point(140, currentY - 3);
-            dtpForecastDate.Size = new Size(150, 22);
-            
-            btnCalculate.Location = new Point(310, currentY - 3);
-            btnCalculate.Size = new Size(120, 30);
-            currentY += 40;
-            
-            // Позиционируем таблицы ниже (изначально скрыты)
-            gbPowerRanges.Location = new Point(10, currentY);
-            gbPowerRanges.Size = new Size(560, 180);
-            gbPowerRanges.Visible = false;
-            
-            gbEnergyRanges.Location = new Point(10, currentY + 190);
-            gbEnergyRanges.Size = new Size(560, 180);
-            gbEnergyRanges.Visible = false;
-
+            // Устанавливаем правильные названия
+            this.Text = "Расчет температурных зависимостей (БД)";
+            this.StartPosition = FormStartPosition.CenterScreen;
+            this.FormBorderStyle = FormBorderStyle.FixedSingle;
+            this.MaximizeBox = false;
         }
 
         private void InitializeEventHandlers()
@@ -370,17 +285,6 @@ namespace WindowsFormsApp1
                 }
 
                 gbPowerRanges.Text = "Коэффициенты влияния для МОЩНОСТИ";
-            }
-
-            // Обеспечиваем прокрутку
-            if (contentPanel != null)
-            {
-                int totalHeight = Math.Max(
-                    gbPowerRanges.Visible ? gbPowerRanges.Location.Y + gbPowerRanges.Height : 0,
-                    gbEnergyRanges.Visible ? gbEnergyRanges.Location.Y + gbEnergyRanges.Height : 0
-                );
-
-                contentPanel.AutoScrollMinSize = new Size(0, totalHeight + 50);
             }
         }
 

@@ -7,7 +7,6 @@
         // Основной контейнер
         private System.Windows.Forms.TableLayoutPanel mainTable;
         private System.Windows.Forms.Panel scrollPanel;
-        private System.Windows.Forms.Panel contentPanel;
 
         // Панель с исходными данными
         private System.Windows.Forms.GroupBox gbInput;
@@ -45,7 +44,6 @@
         private void InitializeComponent()
         {
             this.scrollPanel = new System.Windows.Forms.Panel();
-            this.contentPanel = new System.Windows.Forms.Panel();
             this.gbEnergyRanges = new System.Windows.Forms.GroupBox();
             this.dgvEnergyRangesGrid = new System.Windows.Forms.DataGridView();
             this.gbEnergySteps = new System.Windows.Forms.GroupBox();
@@ -76,15 +74,6 @@
             this.scrollPanel.Name = "scrollPanel";
             this.scrollPanel.Size = new System.Drawing.Size(1100, 700);
             this.scrollPanel.TabIndex = 0;
-
-            // contentPanel (контент внутри прокрутки)
-            this.contentPanel.AutoSize = true;
-            this.contentPanel.Dock = System.Windows.Forms.DockStyle.Top;
-            this.contentPanel.Location = new System.Drawing.Point(0, 0);
-            this.contentPanel.Name = "contentPanel";
-            this.contentPanel.Padding = new System.Windows.Forms.Padding(15);
-            this.contentPanel.Size = new System.Drawing.Size(1083, 1000);
-            this.contentPanel.TabIndex = 0;
 
             // gbEnergyRanges
             this.gbEnergyRanges.Font = new System.Drawing.Font("Arial", 9F);
@@ -249,19 +238,17 @@
 
             this.buttonPanel.Controls.Add(this.btnClose);
 
-            this.contentPanel.Controls.Add(this.gbInput);
-            this.contentPanel.Controls.Add(this.gbPowerSteps);
-            this.contentPanel.Controls.Add(this.gbPowerRanges);
-            this.contentPanel.Controls.Add(this.gbEnergySteps);
-            this.contentPanel.Controls.Add(this.gbEnergyRanges);
-            this.contentPanel.Controls.Add(this.gbResults);
-            this.contentPanel.Controls.Add(this.buttonPanel);
-
-            this.scrollPanel.Controls.Add(this.contentPanel);
-
             this.Controls.Add(this.scrollPanel);
 
             this.ResumeLayout(false);
+
+            this.scrollPanel.Controls.Add(this.gbInput);
+            this.scrollPanel.Controls.Add(this.gbResults);
+            this.scrollPanel.Controls.Add(this.gbPowerSteps);
+            this.scrollPanel.Controls.Add(this.gbPowerRanges);
+            this.scrollPanel.Controls.Add(this.gbEnergySteps);
+            this.scrollPanel.Controls.Add(this.gbEnergyRanges);
+            this.scrollPanel.Controls.Add(this.buttonPanel);
         }
     }
 }

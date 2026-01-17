@@ -196,6 +196,9 @@
     <EmbeddedResource Include="ResultFormForecast.resx">
       <DependentUpon>ResultFormForecast.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="UpdateCoefForm.resx">
+      <DependentUpon>UpdateCoefForm.cs</DependentUpon>
+    </EmbeddedResource>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

@@ -124,9 +124,6 @@ namespace WindowsFormsApp1
 
             // Настройка кнопки закрыть
             btnClose.Click += (s, e) => this.Close();
-
-            // Устанавливаем высоту contentPanel
-            contentPanel.Height = currentY + 100;
         }
 
         private void FillInputData(string systemName, double t1, double t2, double p1, double e1,

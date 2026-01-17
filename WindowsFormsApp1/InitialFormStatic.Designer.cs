@@ -69,9 +69,9 @@
             this.lblCutoffRatio.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
             this.lblCutoffRatio.Location = new System.Drawing.Point(398, 83);
             this.lblCutoffRatio.Name = "lblCutoffRatio";
-            this.lblCutoffRatio.Size = new System.Drawing.Size(266, 20);
+            this.lblCutoffRatio.Size = new System.Drawing.Size(287, 20);
             this.lblCutoffRatio.TabIndex = 11;
-            this.lblCutoffRatio.Text = "Процент оставляемых НЧ (%):";
+            this.lblCutoffRatio.Text = "Процент оставляемых гармоник:";
             // 
             // numCutoffRatio
             // 
@@ -265,7 +265,7 @@
             this.tabPageAnalysis.Location = new System.Drawing.Point(4, 25);
             this.tabPageAnalysis.Name = "tabPageAnalysis";
             this.tabPageAnalysis.Padding = new System.Windows.Forms.Padding(20);
-            this.tabPageAnalysis.Size = new System.Drawing.Size(992, 671);
+            this.tabPageAnalysis.Size = new System.Drawing.Size(711, 653);
             this.tabPageAnalysis.TabIndex = 1;
             this.tabPageAnalysis.Text = "Анализ зависимости";
             this.tabPageAnalysis.UseVisualStyleBackColor = true;
@@ -276,7 +276,7 @@
             this.lblAnalysisResults.Font = new System.Drawing.Font("Microsoft Sans Serif", 12F, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
             this.lblAnalysisResults.Location = new System.Drawing.Point(20, 20);
             this.lblAnalysisResults.Name = "lblAnalysisResults";
-            this.lblAnalysisResults.Size = new System.Drawing.Size(952, 30);
+            this.lblAnalysisResults.Size = new System.Drawing.Size(671, 30);
             this.lblAnalysisResults.TabIndex = 1;
             this.lblAnalysisResults.Text = "Зависимость мощности от температуры";
             this.lblAnalysisResults.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
@@ -293,7 +293,7 @@
             this.dgvAnalysis.RowHeadersVisible = false;
             this.dgvAnalysis.RowHeadersWidth = 51;
             this.dgvAnalysis.RowTemplate.Height = 25;
-            this.dgvAnalysis.Size = new System.Drawing.Size(952, 631);
+            this.dgvAnalysis.Size = new System.Drawing.Size(671, 613);
             this.dgvAnalysis.TabIndex = 0;
             // 
             // InitialFormStatic

@@ -115,7 +115,7 @@
             this.MaximizeBox = false;
             this.Name = "MainMenuForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "Прогноз потребления электроэнергии";
+            this.Text = "Прогноз";
             this.ResumeLayout(false);
         }
     }

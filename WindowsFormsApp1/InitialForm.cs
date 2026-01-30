@@ -411,16 +411,34 @@ namespace WindowsFormsApp1
         }
 
         private void SaveCalculationToDatabase(
-            string systemName, string paramSetName, string calculationType,
-            double t1, double t2, double p1, double e1, DateTime forecastDate,
-            double finalPower, double finalEnergy,
-            List<(double Value, string Description)> intermediateResultsPower,
-            List<(double Value, string Description)> intermediateResultsEnergy)
+    string systemName, string paramSetName, string calculationType,
+    double t1, double t2, double p1, double e1, DateTime forecastDate,
+    double finalPower, double finalEnergy,
+    List<(double Value, string Description)> intermediateResultsPower,
+    List<(double Value, string Description)> intermediateResultsEnergy)
         {
             try
             {
+                // Определяем правильный тип расчета на основе выбранного в интерфейсе
+                string dbCalculationType;
+                switch (calculationType)
+                {
+                    case "По электроэнергии":
+                        dbCalculationType = "Прогноз потребления по электроэнергии";
+                        break;
+                    case "По мощности":
+                        dbCalculationType = "Прогноз потребления по мощности";
+                        break;
+                    case "По мощности и электроэнергии":
+                        dbCalculationType = "Прогноз потребления по мощности и электроэнергии";
+                        break;
+                    default:
+                        dbCalculationType = "Прогноз потребления по мощности"; // fallback
+                        break;
+                }
+
                 // Получаем ID типа расчета
-                int typeId = _dbService.GetOrCreateCalculationType("Прогноз потребления мощности");
+                int typeId = _dbService.GetOrCreateCalculationType(dbCalculationType);
 
                 // Получаем ID энергосистемы
                 int systemId = _dbService.GetOrCreateEnergySystem(systemName);
@@ -466,7 +484,7 @@ namespace WindowsFormsApp1
 
                 if (forecastId > 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"Расчет прогноза сохранен в БД с ID: {forecastId}");
+                    System.Diagnostics.Debug.WriteLine($"Расчет прогноза сохранен в БД с ID: {forecastId}, Тип: {dbCalculationType}");
                 }
             }
             catch (Exception ex)

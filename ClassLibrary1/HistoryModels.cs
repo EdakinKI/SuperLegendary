@@ -38,10 +38,5 @@ namespace ClassLibrary1.Models
         public double? KLinear { get; set; }
         public double? BLinear { get; set; }
         public double? LExponential { get; set; }
-        public string CalculationType =>
-            POriginal.HasValue && EOriginal.HasValue ? "Прогноз потребления по мощности и электроэнергии" :
-            POriginal.HasValue ? "Прогноз потребления по мощности" :
-            EOriginal.HasValue ? "Прогноз потребления по электроэнергии" :
-            "Расчет статических зависимостей";
     }
 }

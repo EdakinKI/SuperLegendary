@@ -19,7 +19,7 @@ namespace WindowsFormsApp1.Services
 
             if (string.IsNullOrEmpty(_connectionString))
             {
-                _connectionString = "Host=localhost;Port=5432;Database=Forecast16;Username=postgres;Password=your_password";
+                _connectionString = "Host=localhost;Port=5432;Database=For;Username=postgres;Password=your_password";
             }
         }
 

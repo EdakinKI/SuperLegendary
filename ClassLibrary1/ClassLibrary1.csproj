@@ -99,6 +99,7 @@
     <Compile Include="DatabaseService.cs" />
     <Compile Include="DataPeriod.cs" />
     <Compile Include="FourierProcessor.cs" />
+    <Compile Include="HistoryModels.cs" />
     <Compile Include="HourlyData.cs" />
     <Compile Include="IProgressReporter.cs" />
     <Compile Include="RegressionModels.cs" />

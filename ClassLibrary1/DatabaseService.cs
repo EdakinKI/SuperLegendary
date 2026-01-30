@@ -1,10 +1,11 @@
-﻿using System;
+﻿using ClassLibrary1.Models;
+using Dapper;
+using Npgsql;
+using System;
 using System.Collections.Generic;
+using System.Configuration;
 using System.Data;
 using System.Linq;
-using System.Configuration;
-using Npgsql;
-using Dapper;
 
 namespace WindowsFormsApp1.Services
 {
@@ -300,6 +301,73 @@ namespace WindowsFormsApp1.Services
             {
                 return false;
             }
+        }
+
+        public List<HistoryItem> GetHistoryData()
+        {
+            var historyItems = new List<HistoryItem>();
+
+            // Загружаем данные прогнозов
+            var forecastSql = @"
+                SELECT 
+                    ct.type_name,
+                    cf.calculation_date,
+                    cf.target_date,
+                    cf.t_original,
+                    cf.t_result,
+                    cf.p_original,
+                    cf.p_result,
+                    cf.e_original,
+                    cf.e_result
+                FROM calculations_forecast cf
+                JOIN calculation_types ct ON cf.type_id = ct.type_id
+                ORDER BY cf.calculation_date DESC";
+
+            var forecastData = Query<ForecastHistoryItem>(forecastSql);
+
+            foreach (var item in forecastData)
+            {
+                historyItems.Add(new HistoryItem
+                {
+                    TypeName = item.type_name,
+                    CalculationDate = item.calculation_date,
+                    TargetDate = item.target_date,
+                    TOriginal = item.t_original,
+                    TResult = item.t_result,
+                    POriginal = item.p_original,
+                    PResult = item.p_result,
+                    EOriginal = item.e_original,
+                    EResult = item.e_result
+                });
+            }
+
+            // Загружаем данные статических расчетов
+            var staticSql = @"
+                SELECT 
+                    ct.type_name,
+                    cs.calculation_date,
+                    cs.k_linear,
+                    cs.b_linear,
+                    cs.l_exponential
+                FROM calculations_static cs
+                JOIN calculation_types ct ON cs.type_id = ct.type_id
+                ORDER BY cs.calculation_date DESC";
+
+            var staticData = Query<StaticHistoryItem>(staticSql);
+
+            foreach (var item in staticData)
+            {
+                historyItems.Add(new HistoryItem
+                {
+                    TypeName = item.type_name,
+                    CalculationDate = item.calculation_date,
+                    KLinear = item.k_linear,
+                    BLinear = item.b_linear,
+                    LExponential = item.l_exponential
+                });
+            }
+
+            return historyItems.OrderByDescending(x => x.CalculationDate).ToList();
         }
     }
 

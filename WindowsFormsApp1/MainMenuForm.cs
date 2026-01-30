@@ -36,6 +36,12 @@ namespace WindowsFormsApp1
             updateCoefForm.ShowDialog(); // Модальное окно
         }
 
+        private void btnHistory_Click(object sender, EventArgs e)
+        {
+            CalculationHistoryForm historyForm = new CalculationHistoryForm();
+            historyForm.ShowDialog();
+        }
+
         private void btnExit_Click(object sender, EventArgs e)
         {
             Application.Exit();

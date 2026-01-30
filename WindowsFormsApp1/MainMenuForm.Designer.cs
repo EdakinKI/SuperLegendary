@@ -9,6 +9,7 @@
         private System.Windows.Forms.Button btnExit;
         private System.Windows.Forms.Label lblTitle;
         private System.Windows.Forms.Button btnUpdateCoef;
+        private System.Windows.Forms.Button btnHistory; // Добавляем новую кнопку
 
         protected override void Dispose(bool disposing)
         {
@@ -26,7 +27,10 @@
             this.btnExit = new System.Windows.Forms.Button();
             this.lblTitle = new System.Windows.Forms.Label();
             this.btnUpdateCoef = new System.Windows.Forms.Button();
+            this.btnHistory = new System.Windows.Forms.Button(); // Инициализируем новую кнопку
+
             this.SuspendLayout();
+
             // 
             // btnForecast
             // 
@@ -50,10 +54,33 @@
             this.btnStatic.UseVisualStyleBackColor = true;
             this.btnStatic.Click += new System.EventHandler(this.btnConsumptionForecast_Click);
             // 
+            // btnUpdateCoef
+            // 
+            this.btnUpdateCoef.BackColor = System.Drawing.SystemColors.ButtonHighlight;
+            this.btnUpdateCoef.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
+            this.btnUpdateCoef.Location = new System.Drawing.Point(50, 170);
+            this.btnUpdateCoef.Name = "btnUpdateCoef";
+            this.btnUpdateCoef.Size = new System.Drawing.Size(284, 40);
+            this.btnUpdateCoef.TabIndex = 4;
+            this.btnUpdateCoef.Text = "Обновить коэффициенты";
+            this.btnUpdateCoef.UseVisualStyleBackColor = false;
+            this.btnUpdateCoef.Click += new System.EventHandler(this.BtnUpdateCoef_Click);
+            // 
+            // btnHistory
+            // 
+            this.btnHistory.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
+            this.btnHistory.Location = new System.Drawing.Point(50, 220);
+            this.btnHistory.Name = "btnHistory";
+            this.btnHistory.Size = new System.Drawing.Size(284, 40);
+            this.btnHistory.TabIndex = 5;
+            this.btnHistory.Text = "История расчетов";
+            this.btnHistory.UseVisualStyleBackColor = true;
+            this.btnHistory.Click += new System.EventHandler(this.btnHistory_Click);
+            // 
             // btnExit
             // 
             this.btnExit.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
-            this.btnExit.Location = new System.Drawing.Point(50, 248);
+            this.btnExit.Location = new System.Drawing.Point(50, 270);
             this.btnExit.Name = "btnExit";
             this.btnExit.Size = new System.Drawing.Size(284, 40);
             this.btnExit.TabIndex = 3;
@@ -73,25 +100,14 @@
             this.lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.lblTitle.Click += new System.EventHandler(this.lblTitle_Click);
             // 
-            // btnUpdateCoef
-            // 
-            this.btnUpdateCoef.BackColor = System.Drawing.SystemColors.ButtonHighlight;
-            this.btnUpdateCoef.Font = new System.Drawing.Font("Microsoft Sans Serif", 10F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(204)));
-            this.btnUpdateCoef.Location = new System.Drawing.Point(50, 174);
-            this.btnUpdateCoef.Name = "btnUpdateCoef";
-            this.btnUpdateCoef.Size = new System.Drawing.Size(284, 40);
-            this.btnUpdateCoef.TabIndex = 4;
-            this.btnUpdateCoef.Text = "Обновить коэффициенты";
-            this.btnUpdateCoef.UseVisualStyleBackColor = false;
-            this.btnUpdateCoef.Click += new System.EventHandler(this.BtnUpdateCoef_Click);
-            // 
             // MainMenuForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(384, 310);
-            this.Controls.Add(this.btnUpdateCoef);
+            this.ClientSize = new System.Drawing.Size(384, 330);
             this.Controls.Add(this.btnExit);
+            this.Controls.Add(this.btnHistory);
+            this.Controls.Add(this.btnUpdateCoef);
             this.Controls.Add(this.btnStatic);
             this.Controls.Add(this.btnForecast);
             this.Controls.Add(this.lblTitle);
@@ -101,7 +117,6 @@
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "Прогноз потребления электроэнергии";
             this.ResumeLayout(false);
-
         }
     }
 }

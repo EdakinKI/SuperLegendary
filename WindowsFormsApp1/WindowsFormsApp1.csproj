@@ -116,6 +116,12 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CalculationHistoryForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="CalculationHistoryForm.Designer.cs">
+      <DependentUpon>CalculationHistoryForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="ChartForm.cs">
       <SubType>Form</SubType>
     </Compile>

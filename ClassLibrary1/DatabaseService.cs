@@ -317,22 +317,22 @@ namespace WindowsFormsApp1.Services
         public DbForecastParams GetForecastParams(string systemName, string paramSetName)
         {
             var sql = @"
-                SELECT 
-                    fps.param_set_id,
-                    fps.name_set_id,
-                    es.system_id,
-                    es.system_name,
-                    trl.range_number,
-                    trl.temp_lower,
-                    trl.temp_upper,
-                    trl.coefficient
-                FROM forecast_param_sets fps
-                JOIN energy_systems es ON fps.system_id = es.system_id
-                LEFT JOIN temperature_range_limits trl ON fps.param_set_id = trl.param_set_id
-                WHERE es.system_name = @SystemName 
-                AND fps.name_set_id = @ParamSetName
-                AND (fps.date_end IS NULL OR fps.date_end > CURRENT_TIMESTAMP)
-                ORDER BY trl.range_number";
+        SELECT 
+            fps.param_set_id,
+            fps.name_set_id,
+            es.system_id,
+            es.system_name,
+            trl.range_number,
+            trl.temp_lower,
+            trl.temp_upper,
+            trl.coefficient
+        FROM forecast_param_sets fps
+        JOIN energy_systems es ON fps.system_id = es.system_id
+        LEFT JOIN temperature_range_limits trl ON fps.param_set_id = trl.param_set_id
+        WHERE es.system_name = @SystemName 
+        AND fps.name_set_id = @ParamSetName
+        AND (fps.date_end IS NULL OR fps.date_end > CURRENT_TIMESTAMP)
+        ORDER BY trl.range_number";
 
             var results = Query<dynamic>(sql, new { SystemName = systemName, ParamSetName = paramSetName });
 
@@ -476,26 +476,28 @@ namespace WindowsFormsApp1.Services
 
                     // 1. Загружаем данные прогнозов
                     var forecastSql = @"
-                SELECT
-                    cf.forecast_id,
-                    ct.type_name,
-                    cf.calculation_date,
-                    cf.target_date,
-                    cf.t_original,
-                    cf.t_result,
-                    cf.p_original,
-                    cf.p_result,
-                    cf.e_original,
-                    cf.e_result,
-                    es.system_name
-                FROM calculations_forecast cf
-                JOIN calculation_types ct ON cf.type_id = ct.type_id
-                WHERE ct.type_name IN (
-                    'Прогноз потребления по мощности',
-                    'Прогноз потребления по электроэнергии',
-                    'Прогноз потребления по мощности и электроэнергии'
-                )
-                ORDER BY cf.calculation_date DESC";
+                    SELECT 
+                        cf.forecast_id,
+                        ct.type_name,
+                        cf.calculation_date,
+                        cf.target_date,
+                        cf.t_original,
+                        cf.t_result,
+                        cf.p_original,
+                        cf.p_result,
+                        cf.e_original,
+                        cf.e_result,
+                        es.system_name,
+                        cf.calculation_name
+                    FROM calculations_forecast cf
+                    JOIN calculation_types ct ON cf.type_id = ct.type_id
+                    JOIN energy_systems es ON cf.system_id = es.system_id
+                    WHERE ct.type_name IN (
+                        'Прогноз потребления по мощности',
+                        'Прогноз потребления по электроэнергии',
+                        'Прогноз потребления по мощности и электроэнергии'
+                    )
+                    ORDER BY cf.calculation_date DESC";
 
                     var forecastData = connection.Query<ForecastHistoryItem>(forecastSql);
 

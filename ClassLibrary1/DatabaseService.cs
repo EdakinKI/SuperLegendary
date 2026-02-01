@@ -1,4 +1,5 @@
-﻿using ClassLibrary1.Models;
+﻿using ClassLibrary1;
+using ClassLibrary1.Models;
 using Dapper;
 using Npgsql;
 using System;
@@ -6,6 +7,7 @@ using System.Collections.Generic;
 using System.Configuration;
 using System.Data;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace WindowsFormsApp1.Services
 {
@@ -19,7 +21,7 @@ namespace WindowsFormsApp1.Services
 
             if (string.IsNullOrEmpty(_connectionString))
             {
-                _connectionString = "Host=localhost;Port=5432;Database=For;Username=postgres;Password=your_password";
+                _connectionString = "Host=localhost;Port=5432;Database=SS;Username=EdakinKI;Password=nata230572";
             }
         }
 
@@ -124,7 +126,7 @@ namespace WindowsFormsApp1.Services
         }
 
         // 4. Работа с температурными диапазонами
-        public void SaveTemperatureRanges(int paramSetId, List<TemperatureRangeDb> ranges)
+        public void SaveTemperatureRanges(int paramSetId, List<DbTemperatureRange> ranges)
         {
             foreach (var range in ranges)
             {
@@ -148,7 +150,7 @@ namespace WindowsFormsApp1.Services
             }
         }
 
-        public List<TemperatureRangeDb> GetTemperatureRanges(int paramSetId)
+        public List<DbTemperatureRange> GetTemperatureRanges(int paramSetId)
         {
             var sql = @"
                 SELECT range_number, temp_lower, temp_upper, coefficient 
@@ -156,36 +158,34 @@ namespace WindowsFormsApp1.Services
                 WHERE param_set_id = @ParamSetId 
                 ORDER BY range_number";
 
-            return Query<TemperatureRangeDb>(sql, new { ParamSetId = paramSetId }).ToList();
+            return Query<DbTemperatureRange>(sql, new { ParamSetId = paramSetId }).ToList();
         }
 
         // 5. Сохранение расчетов прогноза
-        public int SaveForecastCalculation(ForecastCalculationDb calculation)
+        public int SaveForecastCalculation(DbForecastCalculation calculation)
         {
             var sql = @"
-                INSERT INTO calculations_forecast 
-                (type_id, calculation_name, calculation_date, target_date, 
-                 system_id, t_original, p_original, e_original, 
-                 t_result, p_result, e_result, param_set_id) 
-                VALUES (@TypeId, @CalculationName, @CalculationDate, @TargetDate,
-                        @SystemId, @TOriginal, @POriginal, @EOriginal,
-                        @TResult, @PResult, @EResult, @ParamSetId)
-                RETURNING forecast_id";
+        INSERT INTO calculations_forecast 
+        (type_id, calculation_name, calculation_date, target_date, 
+         system_id, t_original, p_original, e_original, 
+         t_result, p_result, e_result, param_set_id) 
+        VALUES (@TypeId, @CalculationName, @CalculationDate, @TargetDate,
+                @SystemId, @TOriginal, @POriginal, @EOriginal,
+                @TResult, @PResult, @EResult, @ParamSetId)
+        RETURNING forecast_id";
 
             return ExecuteScalar<int>(sql, calculation);
         }
 
         // 6. Сохранение расчетов статических зависимостей
-        public int SaveStaticCalculation(StaticCalculationDb calculation, bool askConfirmation = true)
+        public int SaveStaticCalculation(DbStaticCalculation calculation, List<RegressionResult> regressionResults = null)
         {
             try
             {
                 var sql = @"
             INSERT INTO calculations_static 
-            (type_id, calculation_name, calculation_date, 
-             k_linear, b_linear, l_exponential) 
-            VALUES (@TypeId, @CalculationName, @CalculationDate,
-                    @KLinear, @BLinear, @LExponential)
+            (type_id, calculation_name, calculation_date) 
+            VALUES (@TypeId, @CalculationName, @CalculationDate)
             RETURNING static_id";
 
                 // Убедимся, что все поля заполнены
@@ -199,13 +199,92 @@ namespace WindowsFormsApp1.Services
                     calculation.CalculationDate = DateTime.Now;
                 }
 
-                return ExecuteScalar<int>(sql, calculation);
+                int staticId = ExecuteScalar<int>(sql, calculation);
+
+                // Если есть результаты регрессии, сохраняем их
+                if (regressionResults != null && regressionResults.Count > 0)
+                {
+                    SaveRegressionResults(staticId, regressionResults);
+                }
+
+                return staticId;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Ошибка сохранения статического расчета: {ex.Message}");
                 throw;
             }
+        }
+
+        // Новый метод для сохранения результатов регрессии
+        private void SaveRegressionResults(int staticId, List<RegressionResult> regressionResults)
+        {
+            foreach (var result in regressionResults)
+            {
+                // Сохраняем период
+                var periodSql = @"
+            INSERT INTO regression_periods 
+            (period_name, period_year, static_id) 
+            VALUES (@PeriodName, @PeriodYear, @StaticId)
+            RETURNING period_id";
+
+                string periodYear = result.PeriodName.Contains("Сен-Май")
+                    ? result.PeriodName.Split(' ')[0]
+                    : result.PeriodName;
+
+                int periodId = ExecuteScalar<int>(periodSql, new
+                {
+                    PeriodName = result.PeriodName,
+                    PeriodYear = periodYear,
+                    StaticId = staticId
+                });
+
+                // Сохраняем линейную регрессию
+                var linearSql = @"
+            INSERT INTO regression_results 
+            (period_id, regression_type_id, k_coefficient, b_coefficient) 
+            VALUES (@PeriodId, @RegressionTypeId, @KCoefficient, @BCoefficient)";
+
+                // Получаем ID типа линейной регрессии
+                int linearTypeId = GetOrCreateRegressionType("Линейная регрессия");
+
+                Execute(linearSql, new
+                {
+                    PeriodId = periodId,
+                    RegressionTypeId = linearTypeId,
+                    KCoefficient = result.LinearSlope,
+                    BCoefficient = result.LinearIntercept
+                });
+
+                // Сохраняем экспоненциальную регрессию
+                var expSql = @"
+            INSERT INTO regression_results 
+            (period_id, regression_type_id, k_coefficient, l_coefficient) 
+            VALUES (@PeriodId, @RegressionTypeId, @KCoefficient, @LCoefficient)";
+
+                // Получаем ID типа экспоненциальной регрессии
+                int expTypeId = GetOrCreateRegressionType("Экспоненциальная регрессия");
+
+                Execute(expSql, new
+                {
+                    PeriodId = periodId,
+                    RegressionTypeId = expTypeId,
+                    KCoefficient = result.LinearSlope, // Используем тот же k
+                    LCoefficient = result.ExponentialIntensity
+                });
+            }
+        }
+
+        // Метод для получения/создания типа регрессии
+        public int GetOrCreateRegressionType(string regressionTypeName)
+        {
+            var sql = @"
+        INSERT INTO regression_types (regression_type_name) 
+        VALUES (@RegressionTypeName) 
+        ON CONFLICT (regression_type_name) DO UPDATE SET regression_type_name = EXCLUDED.regression_type_name
+        RETURNING regression_type_id";
+
+            return ExecuteScalar<int>(sql, new { RegressionTypeName = regressionTypeName });
         }
 
         public int GetOrCreateTableType(string tableTypeName)
@@ -235,7 +314,7 @@ namespace WindowsFormsApp1.Services
         }
 
         // 7. Получение данных для расчета прогноза
-        public ForecastParamsDb GetForecastParams(string systemName, string paramSetName)
+        public DbForecastParams GetForecastParams(string systemName, string paramSetName)
         {
             var sql = @"
                 SELECT 
@@ -260,20 +339,20 @@ namespace WindowsFormsApp1.Services
             if (!results.Any()) return null;
 
             var first = results.First();
-            var paramsDb = new ForecastParamsDb
+            var paramsDb = new DbForecastParams
             {
                 ParamSetId = first.param_set_id,
                 NameSetId = first.name_set_id,
                 SystemId = first.system_id,
                 SystemName = first.system_name,
-                Ranges = new List<TemperatureRangeDb>()
+                Ranges = new List<DbTemperatureRange>()
             };
 
             foreach (var row in results)
             {
                 if (row.temp_lower != null && row.temp_upper != null)
                 {
-                    paramsDb.Ranges.Add(new TemperatureRangeDb
+                    paramsDb.Ranges.Add(new DbTemperatureRange
                     {
                         RangeNumber = row.range_number,
                         TempLower = row.temp_lower,
@@ -307,21 +386,21 @@ namespace WindowsFormsApp1.Services
         {
             var historyItems = new List<HistoryItem>();
 
-            // Загружаем данные прогнозов
+            // Загружаем данные прогнозов (без изменений)
             var forecastSql = @"
-                SELECT 
-                    ct.type_name,
-                    cf.calculation_date,
-                    cf.target_date,
-                    cf.t_original,
-                    cf.t_result,
-                    cf.p_original,
-                    cf.p_result,
-                    cf.e_original,
-                    cf.e_result
-                FROM calculations_forecast cf
-                JOIN calculation_types ct ON cf.type_id = ct.type_id
-                ORDER BY cf.calculation_date DESC";
+        SELECT 
+            ct.type_name,
+            cf.calculation_date,
+            cf.target_date,
+            cf.t_original,
+            cf.t_result,
+            cf.p_original,
+            cf.p_result,
+            cf.e_original,
+            cf.e_result
+        FROM calculations_forecast cf
+        JOIN calculation_types ct ON cf.type_id = ct.type_id
+        ORDER BY cf.calculation_date DESC";
 
             var forecastData = Query<ForecastHistoryItem>(forecastSql);
 
@@ -341,77 +420,114 @@ namespace WindowsFormsApp1.Services
                 });
             }
 
-            // Загружаем данные статических расчетов
+            // Загружаем данные статических расчетов с агрегацией регрессий
             var staticSql = @"
-                SELECT 
-                    ct.type_name,
-                    cs.calculation_date,
-                    cs.k_linear,
-                    cs.b_linear,
-                    cs.l_exponential
-                FROM calculations_static cs
-                JOIN calculation_types ct ON cs.type_id = ct.type_id
-                ORDER BY cs.calculation_date DESC";
+        SELECT 
+            cs.static_id,
+            ct.type_name,
+            cs.calculation_date,
+            cs.calculation_name,
+            -- Агрегируем периоды и регрессии в JSON
+            COALESCE(
+                JSON_AGG(
+                    JSON_BUILD_OBJECT(
+                        'period_name', rp.period_name,
+                        'linear_k', MAX(CASE WHEN rt.regression_type_name = 'Линейная регрессия' THEN rr.k_coefficient END),
+                        'linear_b', MAX(CASE WHEN rt.regression_type_name = 'Линейная регрессия' THEN rr.b_coefficient END),
+                        'exp_l', MAX(CASE WHEN rt.regression_type_name = 'Экспоненциальная регрессия' THEN rr.l_coefficient END)
+                    )
+                ) FILTER (WHERE rp.period_id IS NOT NULL),
+                '[]'::json
+            ) as regression_data
+        FROM calculations_static cs
+        JOIN calculation_types ct ON cs.type_id = ct.type_id
+        LEFT JOIN regression_periods rp ON cs.static_id = rp.static_id
+        LEFT JOIN regression_results rr ON rp.period_id = rr.period_id
+        LEFT JOIN regression_types rt ON rr.regression_type_id = rt.regression_type_id
+        GROUP BY cs.static_id, ct.type_name, cs.calculation_date, cs.calculation_name
+        ORDER BY cs.calculation_date DESC";
 
-            var staticData = Query<StaticHistoryItem>(staticSql);
-
-            foreach (var item in staticData)
+            try
             {
-                historyItems.Add(new HistoryItem
+                using (var connection = new NpgsqlConnection(_connectionString))
                 {
-                    TypeName = item.type_name,
-                    CalculationDate = item.calculation_date,
-                    KLinear = item.k_linear,
-                    BLinear = item.b_linear,
-                    LExponential = item.l_exponential
-                });
+                    connection.Open();
+
+                    // Используем динамический тип для парсинга JSON
+                    var staticData = connection.Query<dynamic>(staticSql);
+
+                    foreach (var item in staticData)
+                    {
+                        var historyItem = new HistoryItem
+                        {
+                            TypeName = item.type_name,
+                            CalculationDate = item.calculation_date,
+                            CalculationName = item.calculation_name,
+                            // Устанавливаем флаг, что это статический расчет
+                            IsStaticAnalysis = true,
+                            StaticId = item.static_id
+                        };
+
+                        // Парсим JSON с данными регрессий
+                        string regressionJson = item.regression_data?.ToString();
+                        if (!string.IsNullOrEmpty(regressionJson) && regressionJson != "[]")
+                        {
+                            // Десериализуем JSON
+                            var regressions = Newtonsoft.Json.JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(regressionJson);
+
+                            // Создаем строковое представление всех регрессий
+                            var regressionTexts = new List<string>();
+                            foreach (var reg in regressions)
+                            {
+                                string periodName = reg["period_name"]?.ToString();
+                                double? k = reg["linear_k"] != null ? Convert.ToDouble(reg["linear_k"]) : (double?)null;
+                                double? b = reg["linear_b"] != null ? Convert.ToDouble(reg["linear_b"]) : (double?)null;
+                                double? l = reg["exp_l"] != null ? Convert.ToDouble(reg["exp_l"]) : (double?)null;
+
+                                if (k.HasValue)
+                                    historyItem.KLinear = k.Value;
+                                if (b.HasValue)
+                                    historyItem.BLinear = b.Value;
+                                if (l.HasValue)
+                                    historyItem.LExponential = l.Value;
+
+                                regressionTexts.Add($"{periodName}: k={k:F4}, b={b:F2}, L={l:F4}");
+                            }
+
+                            historyItem.RegressionSummary = string.Join("\n", regressionTexts);
+                        }
+
+                        historyItems.Add(historyItem);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки статических расчетов: {ex.Message}");
+                // В случае ошибки загружаем без регрессий
+                var fallbackSql = @"
+            SELECT 
+                ct.type_name,
+                cs.calculation_date,
+                cs.calculation_name
+            FROM calculations_static cs
+            JOIN calculation_types ct ON cs.type_id = ct.type_id
+            ORDER BY cs.calculation_date DESC";
+
+                var fallbackData = Query<dynamic>(fallbackSql);
+                foreach (var item in fallbackData)
+                {
+                    historyItems.Add(new HistoryItem
+                    {
+                        TypeName = item.type_name,
+                        CalculationDate = item.calculation_date,
+                        CalculationName = item.calculation_name,
+                        IsStaticAnalysis = true
+                    });
+                }
             }
 
             return historyItems.OrderByDescending(x => x.CalculationDate).ToList();
         }
-    }
-
-    // Классы моделей для базы данных
-    public class TemperatureRangeDb
-    {
-        public int RangeNumber { get; set; }
-        public int? TempLower { get; set; }
-        public int? TempUpper { get; set; }
-        public double? Coefficient { get; set; }
-    }
-
-    public class ForecastParamsDb
-    {
-        public int ParamSetId { get; set; }
-        public string NameSetId { get; set; }
-        public int SystemId { get; set; }
-        public string SystemName { get; set; }
-        public List<TemperatureRangeDb> Ranges { get; set; }
-    }
-
-    public class ForecastCalculationDb
-    {
-        public int TypeId { get; set; }
-        public string CalculationName { get; set; }
-        public DateTime CalculationDate { get; set; }
-        public DateTime TargetDate { get; set; }
-        public int SystemId { get; set; }
-        public double TOriginal { get; set; }
-        public double? POriginal { get; set; }
-        public double? EOriginal { get; set; }
-        public double TResult { get; set; }
-        public double? PResult { get; set; }
-        public double? EResult { get; set; }
-        public int ParamSetId { get; set; }
-    }
-
-    public class StaticCalculationDb
-    {
-        public int TypeId { get; set; }
-        public string CalculationName { get; set; }
-        public DateTime CalculationDate { get; set; }
-        public double KLinear { get; set; }
-        public double BLinear { get; set; }
-        public double LExponential { get; set; }
     }
 }

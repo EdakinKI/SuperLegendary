@@ -1,11 +1,12 @@
-﻿using System;
+﻿using ClassLibrary1;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using System.Windows.Forms.DataVisualization.Charting;
-using ClassLibrary1;
 using WindowsFormsApp1.Services;
+using static WindowsFormsApp1.Services.DatabaseService;
 
 namespace WindowsFormsApp1
 {
@@ -95,55 +96,25 @@ namespace WindowsFormsApp1
                 progressForm.Show();
                 progressForm.UpdateProgress("Начинаю сохранение...", 0);
 
-                foreach (var result in regressionResults)
+                // Получаем ID типа расчета
+                int typeId = _dbService.GetOrCreateCalculationType("Расчет статических зависимостей");
+
+                var staticCalc = new DbStaticCalculation
                 {
-                    try
-                    {
-                        // Обновляем прогресс
-                        int progress = (savedCount * 100) / Math.Max(1, totalCount);
-                        progressForm.UpdateProgress($"Сохранение периода: {result.PeriodName}...", progress);
+                    TypeId = typeId,
+                    CalculationName = $"Статический анализ {DateTime.Now:dd.MM.yyyy HH:mm}",
+                    CalculationDate = DateTime.Now
+                };
 
-                        // Получаем ID типа расчета
-                        int typeId = _dbService.GetOrCreateCalculationType("Расчет статических зависимостей");
+                // Сохраняем ВСЕ регрессии в одной записи
+                int staticId = _dbService.SaveStaticCalculation(staticCalc, regressionResults);
 
-                        var staticCalc = new StaticCalculationDb
-                        {
-                            TypeId = typeId,
-                            CalculationName = $"{result.PeriodName} - статический анализ",
-                            CalculationDate = DateTime.Now, // ← ВАЖНО: добавляем дату!
-                            KLinear = result.LinearSlope,
-                            BLinear = result.LinearIntercept,
-                            LExponential = result.ExponentialIntensity
-                        };
-
-                        // Сохраняем в БД
-                        int staticId = _dbService.SaveStaticCalculation(staticCalc, askConfirmation: false);
-
-                        if (staticId > 0)
-                        {
-                            savedCount++;
-                            System.Diagnostics.Debug.WriteLine($"Сохранен статический анализ: {result.PeriodName}, ID: {staticId}");
-                        }
-
-                        // Небольшая задержка для отображения прогресса
-                        System.Threading.Thread.Sleep(50);
-                    }
-                    catch (Exception ex)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"Ошибка сохранения периода '{result.PeriodName}': {ex.Message}");
-                        // Продолжаем сохранение других периодов
-                    }
-                }
-
-                progressForm.UpdateProgress("Сохранение завершено!", 100);
-                System.Threading.Thread.Sleep(500);
-                progressForm.Close();
-
-                if (savedCount > 0)
+                if (staticId > 0)
                 {
                     MessageBox.Show(
-                        $"Успешно сохранено {savedCount} из {totalCount} результатов статического анализа.\n\n" +
-                        $"Данные сохранены в таблицу calculations_static.",
+                        $"Успешно сохранен статический анализ с {regressionResults.Count} периодами регрессии.\n" +
+                        $"ID записи: {staticId}\n\n" +
+                        "Все регрессии сохранены как часть одного расчета.",
                         "Успешно",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
@@ -160,11 +131,15 @@ namespace WindowsFormsApp1
                 else
                 {
                     MessageBox.Show(
-                        "Не удалось сохранить ни один результат.\nПроверьте подключение к базе данных.",
+                        "Не удалось сохранить результаты.\nПроверьте подключение к базе данных.",
                         "Ошибка",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error);
                 }
+
+                progressForm.UpdateProgress("Сохранение завершено!", 100);
+                System.Threading.Thread.Sleep(500);
+                progressForm.Close();
             }
             catch (Exception ex)
             {

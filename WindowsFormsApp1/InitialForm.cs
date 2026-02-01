@@ -11,7 +11,7 @@ namespace WindowsFormsApp1
     public partial class InitialFormDb : Form
     {
         private DatabaseService _dbService = new DatabaseService();
-        private ForecastParamsDb _selectedParams;
+        private DbForecastParams _selectedParams;
         private List<EnergySystem> _energySystems = new List<EnergySystem>();
 
         public InitialFormDb()
@@ -217,17 +217,17 @@ namespace WindowsFormsApp1
 
             try
             {
-                // Загружаем параметры из БД
+                // Загружаем параметры из БД - метод возвращает DbForecastParams
                 _selectedParams = _dbService.GetForecastParams(systemName, paramSetName);
 
                 if (_selectedParams != null)
                 {
                     // Преобразуем в формат EnergySystem для отображения
                     _energySystems.Clear();
-                    var energySystem = new EnergySystem
+                    var energySystem = new EnergySystem // ← ИСПОЛЬЗУЙТЕ ClassLibrary1.EnergySystem
                     {
-                        Name = _selectedParams.SystemName,
-                        Ranges = _selectedParams.Ranges.Select(r => new TemperatureRange
+                        Name = _selectedParams.SystemName, // ← DbForecastParams имеет SystemName
+                        Ranges = _selectedParams.Ranges.Select(r => new TemperatureRange // ← ClassLibrary1.TemperatureRange
                         {
                             From = r.TempLower ?? 0,
                             To = r.TempUpper ?? 0,
@@ -250,6 +250,7 @@ namespace WindowsFormsApp1
 
         private void DisplayRangesFromDatabase()
         {
+            // Проверяем _selectedParams вместо _energySystems
             if (_selectedParams == null || _selectedParams.Ranges == null) return;
 
             string selectedType = cmbCalculationType.SelectedItem?.ToString();
@@ -447,8 +448,8 @@ namespace WindowsFormsApp1
                 var paramsDb = _dbService.GetForecastParams(systemName, paramSetName);
                 if (paramsDb == null) return;
 
-                // Создаем расчет
-                var forecastCalc = new ForecastCalculationDb
+                // Создаем расчет - ИСПОЛЬЗУЕМ DbForecastCalculation
+                var forecastCalc = new DbForecastCalculation
                 {
                     TypeId = typeId,
                     CalculationName = $"{calculationType} - {systemName} - {forecastDate:dd.MM.yyyy}",
@@ -457,7 +458,7 @@ namespace WindowsFormsApp1
                     SystemId = systemId,
                     TOriginal = t1,
                     TResult = t2,
-                    ParamSetId = paramsDb.ParamSetId
+                    ParamSetId = paramsDb.ParamSetId // ← paramsDb это DbForecastParams
                 };
 
                 // Заполняем значения в зависимости от типа расчета

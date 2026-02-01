@@ -510,12 +510,12 @@ namespace WindowsFormsApp1
                                 loadDate);
 
                             // Сохраняем температурные диапазоны
-                            var dbRanges = new List<TemperatureRangeDb>();
+                            var dbRanges = new List<DbTemperatureRange>();
                             int rangeNumber = 1;
 
                             foreach (var range in system.Ranges.OrderBy(r => r.From))
                             {
-                                dbRanges.Add(new TemperatureRangeDb
+                                dbRanges.Add(new DbTemperatureRange
                                 {
                                     RangeNumber = rangeNumber++,
                                     TempLower = (int?)Math.Round(range.From),

@@ -28,6 +28,7 @@ namespace ClassLibrary1.Models
     {
         public string TypeName { get; set; }
         public DateTime CalculationDate { get; set; }
+        public string CalculationName { get; set; }
         public DateTime? TargetDate { get; set; }
         public double? TOriginal { get; set; }
         public double? TResult { get; set; }
@@ -38,5 +39,8 @@ namespace ClassLibrary1.Models
         public double? KLinear { get; set; }
         public double? BLinear { get; set; }
         public double? LExponential { get; set; }
+        public bool IsStaticAnalysis { get; set; }
+        public int? StaticId { get; set; }
+        public string RegressionSummary { get; set; }
     }
 }

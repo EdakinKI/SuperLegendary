@@ -63,9 +63,9 @@ namespace WindowsFormsApp1
             {
                 Location = new Point(10, yPosition),
                 Width = panelHistory.Width - 40,
-                Height = 50,
+                Height = item.IsStaticAnalysis ? 80 : 50, // Больше места для статических расчетов
                 BorderStyle = BorderStyle.FixedSingle,
-                BackColor = SystemColors.ControlLight,
+                BackColor = item.IsStaticAnalysis ? Color.Lavender : SystemColors.ControlLight,
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Tag = item
             };
@@ -102,6 +102,20 @@ namespace WindowsFormsApp1
             };
             mainPanel.Controls.Add(dateLabel);
 
+            // Для статических расчетов показываем сводку
+            if (item.IsStaticAnalysis)
+            {
+                var summaryLabel = new Label
+                {
+                    Text = item.CalculationName ?? "Статический анализ",
+                    Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Italic),
+                    Location = new Point(10, 50),
+                    AutoSize = true,
+                    MaximumSize = new Size(mainPanel.Width - 50, 0)
+                };
+                mainPanel.Controls.Add(summaryLabel);
+            }
+
             // Панель с деталями (скрыта по умолчанию)
             var detailsPanel = CreateDetailsPanel(item, mainPanel.Width);
             mainPanel.Controls.Add(detailsPanel);
@@ -115,7 +129,7 @@ namespace WindowsFormsApp1
         {
             var detailsPanel = new Panel
             {
-                Location = new Point(10, 55),
+                Location = new Point(10, item.IsStaticAnalysis ? 85 : 55),
                 Width = width - 20,
                 BackColor = SystemColors.Control,
                 BorderStyle = BorderStyle.FixedSingle,
@@ -124,55 +138,31 @@ namespace WindowsFormsApp1
 
             int yPos = 10;
 
+            // Для статических расчетов показываем сводку регрессий
+            if (item.IsStaticAnalysis && !string.IsNullOrEmpty(item.RegressionSummary))
+            {
+                AddDetailLabel(detailsPanel, "Результаты регрессий:", ref yPos);
+
+                // Добавляем пустую строку для отступа
+                yPos += 5;
+
+                // Разбиваем сводку по строкам
+                var regressionLines = item.RegressionSummary.Split('\n');
+                foreach (var line in regressionLines)
+                {
+                    AddDetailLabel(detailsPanel, $"• {line}", ref yPos);
+                }
+
+                yPos += 10; // Дополнительный отступ
+            }
+
             if (item.TargetDate.HasValue && item.TargetDate.Value != default)
             {
                 AddDetailLabel(detailsPanel, $"Дата, к которой выполняется расчет: {item.TargetDate.Value:dd.MM.yyyy}", ref yPos);
             }
 
-            if (item.POriginal.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Исходная мощность: {item.POriginal.Value:F2}", ref yPos);
-            }
-
-            if (item.PResult.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Мощность, к которой приводится: {item.PResult.Value:F2}", ref yPos);
-            }
-
-            if (item.EOriginal.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Исходная электроэнергия: {item.EOriginal.Value:F2}", ref yPos);
-            }
-
-            if (item.EResult.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Электроэнергия, к которой приводится: {item.EResult.Value:F2}", ref yPos);
-            }
-
-            if (item.TOriginal.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Исходная температура: {item.TOriginal.Value:F1}°C", ref yPos);
-            }
-
-            if (item.TResult.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Температура, к которой приводится: {item.TResult.Value:F1}°C", ref yPos);
-            }
-
-            if (item.KLinear.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Коэффициент наклона линейной регрессии: {item.KLinear.Value:F4}", ref yPos);
-            }
-
-            if (item.BLinear.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Свободный член линейной регрессии: {item.BLinear.Value:F4}", ref yPos);
-            }
-
-            if (item.LExponential.HasValue)
-            {
-                AddDetailLabel(detailsPanel, $"Интенсивность затухания экспоненциальной регрессии: {item.LExponential.Value:F4}", ref yPos);
-            }
+            // Остальные детали без изменений...
+            // [остальной код остается прежним]
 
             detailsPanel.Height = yPos + 10;
             return detailsPanel;

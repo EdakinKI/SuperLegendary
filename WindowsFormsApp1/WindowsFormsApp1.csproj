@@ -243,6 +243,9 @@
     <Compile Include="UpdateCoefForm.Designer.cs">
       <DependentUpon>UpdateCoefForm.cs</DependentUpon>
     </Compile>
+    <EmbeddedResource Include="CalculationHistoryForm.resx">
+      <DependentUpon>CalculationHistoryForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="ChartForm.resx">
       <DependentUpon>ChartForm.cs</DependentUpon>
     </EmbeddedResource>

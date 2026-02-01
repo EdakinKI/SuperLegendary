@@ -12,25 +12,47 @@ namespace WindowsFormsApp1
     {
         private DatabaseService _databaseService;
         private Dictionary<Panel, bool> _expandedPanels = new Dictionary<Panel, bool>();
+        private List<HistoryItem> _allHistoryItems = new List<HistoryItem>();
+
+        // Фильтры
+        private string _selectedType = "Все типы";
+        private DateTime? _dateFrom = null;
+        private DateTime? _dateTo = null;
 
         public CalculationHistoryForm()
         {
             InitializeComponent();
             _databaseService = new DatabaseService();
+            InitializeFilters();
+        }
+
+        private void InitializeFilters()
+        {
+            // Устанавливаем даты по умолчанию (последние 30 дней)
+            dtpFilterDateFrom.Value = DateTime.Now.AddDays(-30);
+            dtpFilterDateTo.Value = DateTime.Now;
+
+            // Выбираем "Все типы" по умолчанию
+            cmbFilterType.SelectedIndex = 0;
+
+            // Активируем/деактивируем DateTimePicker в зависимости от чекбокса
+            UpdateDateFiltersState();
         }
 
         private void CalculationHistoryForm_Load(object sender, EventArgs e)
         {
-            LoadHistoryData();
+            LoadAllHistoryData();
         }
 
-        private void LoadHistoryData()
+        private void LoadAllHistoryData()
         {
             try
             {
-                // Загружаем данные из базы
-                var historyItems = _databaseService.GetHistoryData();
-                DisplayHistory(historyItems);
+                // Загружаем все данные из базы
+                _allHistoryItems = _databaseService.GetHistoryData();
+
+                // Применяем текущие фильтры
+                ApplyFilters();
             }
             catch (Exception ex)
             {
@@ -39,10 +61,79 @@ namespace WindowsFormsApp1
             }
         }
 
+        private void ApplyFilters()
+        {
+            try
+            {
+                // Начинаем со всех данных
+                var filteredItems = _allHistoryItems.AsEnumerable();
+
+                // Фильтр по типу
+                if (_selectedType != "Все типы")
+                {
+                    filteredItems = filteredItems.Where(item => item.TypeName == _selectedType);
+                }
+
+                // Фильтр по дате (если не выбрано "Все даты")
+                if (_dateFrom.HasValue)
+                {
+                    filteredItems = filteredItems.Where(item => item.CalculationDate >= _dateFrom.Value);
+                }
+
+                if (_dateTo.HasValue)
+                {
+                    // Добавляем 1 день чтобы включить весь день
+                    var dateToWithTime = _dateTo.Value.AddDays(1).AddSeconds(-1);
+                    filteredItems = filteredItems.Where(item => item.CalculationDate <= dateToWithTime);
+                }
+
+                // Отображаем отфильтрованные данные
+                DisplayHistory(filteredItems.ToList());
+
+                // Обновляем заголовок
+                UpdateTitle();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка применения фильтров: {ex.Message}", "Ошибка",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdateTitle()
+        {
+            int totalCount = _allHistoryItems.Count;
+            int filteredCount = panelHistory.Controls.Count; // количество отображенных элементов
+
+            if (totalCount == filteredCount)
+            {
+                lblTitle.Text = $"История расчетов ({totalCount})";
+            }
+            else
+            {
+                lblTitle.Text = $"История расчетов ({filteredCount} из {totalCount})";
+            }
+        }
+
         private void DisplayHistory(List<HistoryItem> historyItems)
         {
             panelHistory.Controls.Clear();
             _expandedPanels.Clear();
+
+            if (!historyItems.Any())
+            {
+                // Показываем сообщение, если нет данных
+                var noDataLabel = new Label
+                {
+                    Text = "Нет данных, соответствующих выбранным фильтрам",
+                    Font = new Font("Microsoft Sans Serif", 10F, FontStyle.Italic),
+                    ForeColor = Color.Gray,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    Dock = DockStyle.Fill
+                };
+                panelHistory.Controls.Add(noDataLabel);
+                return;
+            }
 
             int yPosition = 10;
 
@@ -62,9 +153,9 @@ namespace WindowsFormsApp1
             int panelHeight = 50; // базовая высота
 
             if (item.IsStaticAnalysis)
-                panelHeight = 70; // больше места для статических расчетов
+                panelHeight = 70;
             else if (item.TypeName.Contains("и электроэнергии"))
-                panelHeight = 60; // средняя для комбинированных
+                panelHeight = 60;
 
             // Основная панель элемента
             var mainPanel = new Panel
@@ -125,6 +216,7 @@ namespace WindowsFormsApp1
 
             // Панель с деталями (скрыта по умолчанию)
             var detailsPanel = CreateDetailsPanel(item, mainPanel.Width);
+            detailsPanel.Location = new Point(10, mainPanel.Height - 10);
             mainPanel.Controls.Add(detailsPanel);
 
             _expandedPanels.Add(mainPanel, false);
@@ -150,7 +242,6 @@ namespace WindowsFormsApp1
         {
             var detailsPanel = new Panel
             {
-                Location = new Point(10, item.IsStaticAnalysis ? 75 : 55),
                 Width = width - 20,
                 BackColor = SystemColors.Control,
                 BorderStyle = BorderStyle.FixedSingle,
@@ -280,7 +371,7 @@ namespace WindowsFormsApp1
                 {
                     button.Text = isExpanded ? "▲" : "▼";
                     detailsPanel.Visible = isExpanded;
-                    mainPanel.Height = isExpanded ? 55 + detailsPanel.Height + 10 : 50;
+                    mainPanel.Height = isExpanded ? mainPanel.Height + detailsPanel.Height + 10 : mainPanel.Height - detailsPanel.Height;
 
                     // Обновляем положение всех последующих элементов
                     UpdateItemsPosition(mainPanel);
@@ -306,9 +397,71 @@ namespace WindowsFormsApp1
             }
         }
 
+        // Обработчики фильтров
+        private void btnApplyFilters_Click(object sender, EventArgs e)
+        {
+            // Сохраняем выбранные фильтры
+            _selectedType = cmbFilterType.SelectedItem?.ToString() ?? "Все типы";
+
+            if (chkShowAll.Checked)
+            {
+                _dateFrom = null;
+                _dateTo = null;
+            }
+            else
+            {
+                _dateFrom = dtpFilterDateFrom.Value.Date;
+                _dateTo = dtpFilterDateTo.Value.Date;
+
+                // Проверяем, что дата "от" не больше даты "до"
+                if (_dateFrom > _dateTo)
+                {
+                    MessageBox.Show("Дата 'От' не может быть больше даты 'До'", "Ошибка",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+            }
+
+            // Применяем фильтры
+            ApplyFilters();
+        }
+
+        private void btnClearFilters_Click(object sender, EventArgs e)
+        {
+            // Сбрасываем все фильтры
+            cmbFilterType.SelectedIndex = 0;
+            chkShowAll.Checked = true;
+            dtpFilterDateFrom.Value = DateTime.Now.AddDays(-30);
+            dtpFilterDateTo.Value = DateTime.Now;
+
+            // Обновляем состояние
+            UpdateDateFiltersState();
+
+            // Применяем фильтры (все данные)
+            _selectedType = "Все типы";
+            _dateFrom = null;
+            _dateTo = null;
+            ApplyFilters();
+        }
+
+        private void chkShowAll_CheckedChanged(object sender, EventArgs e)
+        {
+            UpdateDateFiltersState();
+        }
+
+        private void UpdateDateFiltersState()
+        {
+            bool enableDates = !chkShowAll.Checked;
+            dtpFilterDateFrom.Enabled = enableDates;
+            dtpFilterDateTo.Enabled = enableDates;
+            lblFilterDateFrom.Enabled = enableDates;
+            lblFilterDateTo.Enabled = enableDates;
+        }
+
         private void btnRefresh_Click(object sender, EventArgs e)
         {
-            LoadHistoryData();
+            // Перезагружаем все данные из базы
+            LoadAllHistoryData();
         }
 
         private void btnClose_Click(object sender, EventArgs e)

@@ -386,148 +386,222 @@ namespace WindowsFormsApp1.Services
         {
             var historyItems = new List<HistoryItem>();
 
-            // Загружаем данные прогнозов (без изменений)
-            var forecastSql = @"
-        SELECT 
-            ct.type_name,
-            cf.calculation_date,
-            cf.target_date,
-            cf.t_original,
-            cf.t_result,
-            cf.p_original,
-            cf.p_result,
-            cf.e_original,
-            cf.e_result
-        FROM calculations_forecast cf
-        JOIN calculation_types ct ON cf.type_id = ct.type_id
-        ORDER BY cf.calculation_date DESC";
-
-            var forecastData = Query<ForecastHistoryItem>(forecastSql);
-
-            foreach (var item in forecastData)
-            {
-                historyItems.Add(new HistoryItem
-                {
-                    TypeName = item.type_name,
-                    CalculationDate = item.calculation_date,
-                    TargetDate = item.target_date,
-                    TOriginal = item.t_original,
-                    TResult = item.t_result,
-                    POriginal = item.p_original,
-                    PResult = item.p_result,
-                    EOriginal = item.e_original,
-                    EResult = item.e_result
-                });
-            }
-
-            // Загружаем данные статических расчетов с агрегацией регрессий
-            var staticSql = @"
-        SELECT 
-            cs.static_id,
-            ct.type_name,
-            cs.calculation_date,
-            cs.calculation_name,
-            -- Агрегируем периоды и регрессии в JSON
-            COALESCE(
-                JSON_AGG(
-                    JSON_BUILD_OBJECT(
-                        'period_name', rp.period_name,
-                        'linear_k', MAX(CASE WHEN rt.regression_type_name = 'Линейная регрессия' THEN rr.k_coefficient END),
-                        'linear_b', MAX(CASE WHEN rt.regression_type_name = 'Линейная регрессия' THEN rr.b_coefficient END),
-                        'exp_l', MAX(CASE WHEN rt.regression_type_name = 'Экспоненциальная регрессия' THEN rr.l_coefficient END)
-                    )
-                ) FILTER (WHERE rp.period_id IS NOT NULL),
-                '[]'::json
-            ) as regression_data
-        FROM calculations_static cs
-        JOIN calculation_types ct ON cs.type_id = ct.type_id
-        LEFT JOIN regression_periods rp ON cs.static_id = rp.static_id
-        LEFT JOIN regression_results rr ON rp.period_id = rr.period_id
-        LEFT JOIN regression_types rt ON rr.regression_type_id = rt.regression_type_id
-        GROUP BY cs.static_id, ct.type_name, cs.calculation_date, cs.calculation_name
-        ORDER BY cs.calculation_date DESC";
-
             try
             {
                 using (var connection = new NpgsqlConnection(_connectionString))
                 {
                     connection.Open();
 
-                    // Используем динамический тип для парсинга JSON
-                    var staticData = connection.Query<dynamic>(staticSql);
+                    // 1. Загружаем данные прогнозов
+                    var forecastSql = @"
+                SELECT 
+                    ct.type_name,
+                    cf.calculation_date,
+                    cf.target_date,
+                    cf.t_original,
+                    cf.t_result,
+                    cf.p_original,
+                    cf.p_result,
+                    cf.e_original,
+                    cf.e_result
+                FROM calculations_forecast cf
+                JOIN calculation_types ct ON cf.type_id = ct.type_id
+                WHERE ct.type_name IN (
+                    'Прогноз потребления по мощности',
+                    'Прогноз потребления по электроэнергии',
+                    'Прогноз потребления по мощности и электроэнергии'
+                )
+                ORDER BY cf.calculation_date DESC";
 
-                    foreach (var item in staticData)
+                    var forecastData = connection.Query<ForecastHistoryItem>(forecastSql);
+
+                    foreach (var item in forecastData)
                     {
                         var historyItem = new HistoryItem
                         {
                             TypeName = item.type_name,
                             CalculationDate = item.calculation_date,
-                            CalculationName = item.calculation_name,
-                            // Устанавливаем флаг, что это статический расчет
-                            IsStaticAnalysis = true,
-                            StaticId = item.static_id
+                            TargetDate = item.target_date,
+                            TOriginal = item.t_original,
+                            TResult = item.t_result
                         };
 
-                        // Парсим JSON с данными регрессий
-                        string regressionJson = item.regression_data?.ToString();
-                        if (!string.IsNullOrEmpty(regressionJson) && regressionJson != "[]")
+                        // В зависимости от типа расчета добавляем соответствующие поля
+                        switch (item.type_name)
                         {
-                            // Десериализуем JSON
-                            var regressions = Newtonsoft.Json.JsonConvert.DeserializeObject<List<Dictionary<string, object>>>(regressionJson);
+                            case "Прогноз потребления по мощности":
+                                historyItem.POriginal = item.p_original;
+                                historyItem.PResult = item.p_result;
+                                break;
 
-                            // Создаем строковое представление всех регрессий
-                            var regressionTexts = new List<string>();
-                            foreach (var reg in regressions)
-                            {
-                                string periodName = reg["period_name"]?.ToString();
-                                double? k = reg["linear_k"] != null ? Convert.ToDouble(reg["linear_k"]) : (double?)null;
-                                double? b = reg["linear_b"] != null ? Convert.ToDouble(reg["linear_b"]) : (double?)null;
-                                double? l = reg["exp_l"] != null ? Convert.ToDouble(reg["exp_l"]) : (double?)null;
+                            case "Прогноз потребления по электроэнергии":
+                                historyItem.EOriginal = item.e_original;
+                                historyItem.EResult = item.e_result;
+                                break;
 
-                                if (k.HasValue)
-                                    historyItem.KLinear = k.Value;
-                                if (b.HasValue)
-                                    historyItem.BLinear = b.Value;
-                                if (l.HasValue)
-                                    historyItem.LExponential = l.Value;
-
-                                regressionTexts.Add($"{periodName}: k={k:F4}, b={b:F2}, L={l:F4}");
-                            }
-
-                            historyItem.RegressionSummary = string.Join("\n", regressionTexts);
+                            case "Прогноз потребления по мощности и электроэнергии":
+                                historyItem.POriginal = item.p_original;
+                                historyItem.PResult = item.p_result;
+                                historyItem.EOriginal = item.e_original;
+                                historyItem.EResult = item.e_result;
+                                break;
                         }
 
                         historyItems.Add(historyItem);
                     }
+
+                    // 2. Загружаем данные статических зависимостей
+                    var staticSql = @"
+                SELECT DISTINCT
+                    cs.static_id,
+                    ct.type_name,
+                    cs.calculation_date,
+                    cs.calculation_name
+                FROM calculations_static cs
+                JOIN calculation_types ct ON cs.type_id = ct.type_id
+                WHERE ct.type_name = 'Расчет статических зависимостей'
+                ORDER BY cs.calculation_date DESC";
+
+                    var staticCalculations = connection.Query<dynamic>(staticSql);
+
+                    foreach (var calc in staticCalculations)
+                    {
+                        var historyItem = new HistoryItem
+                        {
+                            TypeName = calc.type_name,
+                            CalculationDate = calc.calculation_date,
+                            CalculationName = calc.calculation_name,
+                            IsStaticAnalysis = true,
+                            StaticId = calc.static_id
+                        };
+
+                        // Теперь загружаем периоды и регрессии для этого статического расчета
+                        var periodsSql = @"
+                    SELECT 
+                        rp.period_id,
+                        rp.period_name,
+                        rp.period_year,
+                        -- Линейная регрессия
+                        MAX(CASE WHEN rt.regression_type_name = 'Линейная регрессия' THEN rr.k_coefficient END) as linear_k,
+                        MAX(CASE WHEN rt.regression_type_name = 'Линейная регрессия' THEN rr.b_coefficient END) as linear_b,
+                        -- Экспоненциальная регрессия
+                        MAX(CASE WHEN rt.regression_type_name = 'Экспоненциальная регрессия' THEN rr.l_coefficient END) as exp_l
+                    FROM regression_periods rp
+                    LEFT JOIN regression_results rr ON rp.period_id = rr.period_id
+                    LEFT JOIN regression_types rt ON rr.regression_type_id = rt.regression_type_id
+                    WHERE rp.static_id = @StaticId
+                    GROUP BY rp.period_id, rp.period_name, rp.period_year
+                    ORDER BY rp.period_name";
+
+                        var periods = connection.Query<dynamic>(periodsSql, new { StaticId = calc.static_id });
+
+                        var periodDetails = new List<PeriodDetail>();
+                        var detailsText = new List<string>();
+
+                        foreach (var period in periods)
+                        {
+                            var periodDetail = new PeriodDetail
+                            {
+                                PeriodName = period.period_name?.ToString() ?? "Неизвестный период",
+                                PeriodYear = period.period_year?.ToString() ?? "",
+                                KLinear = period.linear_k != null ? Convert.ToDouble(period.linear_k) : (double?)null,
+                                BLinear = period.linear_b != null ? Convert.ToDouble(period.linear_b) : (double?)null,
+                                LExponential = period.exp_l != null ? Convert.ToDouble(period.exp_l) : (double?)null
+                            };
+
+                            periodDetails.Add(periodDetail);
+
+                            // Формируем текст для отображения
+                            detailsText.Add($"Период: {periodDetail.PeriodName} ({periodDetail.PeriodYear})");
+                            if (periodDetail.KLinear.HasValue)
+                                detailsText.Add($"  k (наклон): {periodDetail.KLinear.Value:F4}");
+                            if (periodDetail.BLinear.HasValue)
+                                detailsText.Add($"  b (свободный член): {periodDetail.BLinear.Value:F2}");
+                            if (periodDetail.LExponential.HasValue)
+                                detailsText.Add($"  L (интенсивность): {periodDetail.LExponential.Value:F4}");
+                            detailsText.Add(""); // Пустая строка между периодами
+                        }
+
+                        historyItem.PeriodDetails = periodDetails;
+                        historyItem.RegressionSummary = string.Join("\n", detailsText);
+
+                        historyItems.Add(historyItem);
+                    }
+
+                    // 3. Сортируем все по дате
+                    historyItems = historyItems.OrderByDescending(x => x.CalculationDate).ToList();
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки статических расчетов: {ex.Message}");
-                // В случае ошибки загружаем без регрессий
-                var fallbackSql = @"
-            SELECT 
-                ct.type_name,
-                cs.calculation_date,
-                cs.calculation_name
-            FROM calculations_static cs
-            JOIN calculation_types ct ON cs.type_id = ct.type_id
-            ORDER BY cs.calculation_date DESC";
+                System.Diagnostics.Debug.WriteLine($"Ошибка загрузки истории расчетов: {ex.Message}\n{ex.StackTrace}");
 
-                var fallbackData = Query<dynamic>(fallbackSql);
-                foreach (var item in fallbackData)
+                // Запасной вариант - простой запрос
+                try
                 {
-                    historyItems.Add(new HistoryItem
+                    var fallbackSql = @"
+                SELECT 
+                    ct.type_name,
+                    cf.calculation_date,
+                    cf.target_date,
+                    cf.t_original,
+                    cf.t_result,
+                    cf.p_original,
+                    cf.p_result,
+                    cf.e_original,
+                    cf.e_result
+                FROM calculations_forecast cf
+                JOIN calculation_types ct ON cf.type_id = ct.type_id
+                ORDER BY cf.calculation_date DESC";
+
+                    var fallbackData = Query<ForecastHistoryItem>(fallbackSql);
+
+                    foreach (var item in fallbackData)
                     {
-                        TypeName = item.type_name,
-                        CalculationDate = item.calculation_date,
-                        CalculationName = item.calculation_name,
-                        IsStaticAnalysis = true
-                    });
+                        historyItems.Add(new HistoryItem
+                        {
+                            TypeName = item.type_name,
+                            CalculationDate = item.calculation_date,
+                            TargetDate = item.target_date,
+                            TOriginal = item.t_original,
+                            TResult = item.t_result,
+                            POriginal = item.p_original,
+                            PResult = item.p_result,
+                            EOriginal = item.e_original,
+                            EResult = item.e_result
+                        });
+                    }
+
+                    // Также попробуем загрузить статические расчеты простым способом
+                    var simpleStaticSql = @"
+                SELECT 
+                    ct.type_name,
+                    cs.calculation_date,
+                    cs.calculation_name
+                FROM calculations_static cs
+                JOIN calculation_types ct ON cs.type_id = ct.type_id
+                WHERE ct.type_name = 'Расчет статических зависимостей'
+                ORDER BY cs.calculation_date DESC";
+
+                    var staticData = Query<dynamic>(simpleStaticSql);
+                    foreach (var item in staticData)
+                    {
+                        historyItems.Add(new HistoryItem
+                        {
+                            TypeName = item.type_name,
+                            CalculationDate = item.calculation_date,
+                            CalculationName = item.calculation_name,
+                            IsStaticAnalysis = true
+                        });
+                    }
+                }
+                catch (Exception ex2)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Ошибка при запасной загрузке: {ex2.Message}");
                 }
             }
 
-            return historyItems.OrderByDescending(x => x.CalculationDate).ToList();
+            return historyItems;
         }
     }
 }

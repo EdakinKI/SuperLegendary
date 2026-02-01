@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 namespace ClassLibrary1.Models
 {
@@ -24,6 +25,16 @@ namespace ClassLibrary1.Models
         public double? l_exponential { get; set; }
     }
 
+    public class PeriodDetail
+    {
+        public string PeriodName { get; set; }
+        public string PeriodYear { get; set; }
+        public double? KLinear { get; set; }
+        public double? BLinear { get; set; }
+        public double? LExponential { get; set; }
+    }
+
+    // Обновите класс HistoryItem в HistoryModels.cs:
     public class HistoryItem
     {
         public string TypeName { get; set; }
@@ -39,8 +50,11 @@ namespace ClassLibrary1.Models
         public double? KLinear { get; set; }
         public double? BLinear { get; set; }
         public double? LExponential { get; set; }
+
+        // Новые свойства
         public bool IsStaticAnalysis { get; set; }
         public int? StaticId { get; set; }
         public string RegressionSummary { get; set; }
+        public List<PeriodDetail> PeriodDetails { get; set; }
     }
 }

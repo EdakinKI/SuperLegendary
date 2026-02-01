@@ -58,14 +58,22 @@ namespace WindowsFormsApp1
 
         private Panel CreateHistoryItemPanel(HistoryItem item, int yPosition)
         {
+            // Определяем высоту панели в зависимости от типа
+            int panelHeight = 50; // базовая высота
+
+            if (item.IsStaticAnalysis)
+                panelHeight = 70; // больше места для статических расчетов
+            else if (item.TypeName.Contains("и электроэнергии"))
+                panelHeight = 60; // средняя для комбинированных
+
             // Основная панель элемента
             var mainPanel = new Panel
             {
                 Location = new Point(10, yPosition),
                 Width = panelHistory.Width - 40,
-                Height = item.IsStaticAnalysis ? 80 : 50, // Больше места для статических расчетов
+                Height = panelHeight,
                 BorderStyle = BorderStyle.FixedSingle,
-                BackColor = item.IsStaticAnalysis ? Color.Lavender : SystemColors.ControlLight,
+                BackColor = GetItemColor(item),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 Tag = item
             };
@@ -102,18 +110,17 @@ namespace WindowsFormsApp1
             };
             mainPanel.Controls.Add(dateLabel);
 
-            // Для статических расчетов показываем сводку
-            if (item.IsStaticAnalysis)
+            // Для статических расчетов показываем количество периодов
+            if (item.IsStaticAnalysis && item.PeriodDetails != null)
             {
-                var summaryLabel = new Label
+                var periodsLabel = new Label
                 {
-                    Text = item.CalculationName ?? "Статический анализ",
+                    Text = $"Периодов: {item.PeriodDetails.Count}",
                     Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Italic),
                     Location = new Point(10, 50),
-                    AutoSize = true,
-                    MaximumSize = new Size(mainPanel.Width - 50, 0)
+                    AutoSize = true
                 };
-                mainPanel.Controls.Add(summaryLabel);
+                mainPanel.Controls.Add(periodsLabel);
             }
 
             // Панель с деталями (скрыта по умолчанию)
@@ -125,11 +132,25 @@ namespace WindowsFormsApp1
             return mainPanel;
         }
 
+        private Color GetItemColor(HistoryItem item)
+        {
+            if (item.IsStaticAnalysis)
+                return Color.Lavender;
+            else if (item.TypeName.Contains("мощности и электроэнергии"))
+                return Color.LightCyan;
+            else if (item.TypeName.Contains("мощности"))
+                return Color.LightYellow;
+            else if (item.TypeName.Contains("электроэнергии"))
+                return Color.LightGreen;
+            else
+                return SystemColors.ControlLight;
+        }
+
         private Panel CreateDetailsPanel(HistoryItem item, int width)
         {
             var detailsPanel = new Panel
             {
-                Location = new Point(10, item.IsStaticAnalysis ? 85 : 55),
+                Location = new Point(10, item.IsStaticAnalysis ? 75 : 55),
                 Width = width - 20,
                 BackColor = SystemColors.Control,
                 BorderStyle = BorderStyle.FixedSingle,
@@ -138,31 +159,91 @@ namespace WindowsFormsApp1
 
             int yPos = 10;
 
-            // Для статических расчетов показываем сводку регрессий
-            if (item.IsStaticAnalysis && !string.IsNullOrEmpty(item.RegressionSummary))
-            {
-                AddDetailLabel(detailsPanel, "Результаты регрессий:", ref yPos);
-
-                // Добавляем пустую строку для отступа
-                yPos += 5;
-
-                // Разбиваем сводку по строкам
-                var regressionLines = item.RegressionSummary.Split('\n');
-                foreach (var line in regressionLines)
-                {
-                    AddDetailLabel(detailsPanel, $"• {line}", ref yPos);
-                }
-
-                yPos += 10; // Дополнительный отступ
-            }
-
+            // Отображаем данные в зависимости от типа расчета
             if (item.TargetDate.HasValue && item.TargetDate.Value != default)
             {
                 AddDetailLabel(detailsPanel, $"Дата, к которой выполняется расчет: {item.TargetDate.Value:dd.MM.yyyy}", ref yPos);
             }
 
-            // Остальные детали без изменений...
-            // [остальной код остается прежним]
+            if (item.TOriginal.HasValue)
+            {
+                AddDetailLabel(detailsPanel, $"Исходная температура: {item.TOriginal.Value:F1}°C", ref yPos);
+            }
+
+            if (item.TResult.HasValue)
+            {
+                AddDetailLabel(detailsPanel, $"Температура, к которой приводится: {item.TResult.Value:F1}°C", ref yPos);
+            }
+
+            // Для прогнозов по мощности
+            if (item.TypeName.Contains("мощности") && !item.TypeName.Contains("электроэнергии"))
+            {
+                if (item.POriginal.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Исходная мощность: {item.POriginal.Value:F2} МВт", ref yPos);
+                }
+                if (item.PResult.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Мощность, к которой приводится: {item.PResult.Value:F2} МВт", ref yPos);
+                }
+            }
+
+            // Для прогнозов по электроэнергии
+            if (item.TypeName.Contains("электроэнергии") && !item.TypeName.Contains("мощности"))
+            {
+                if (item.EOriginal.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Исходная электроэнергия: {item.EOriginal.Value:F2} млн кВт·ч", ref yPos);
+                }
+                if (item.EResult.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Электроэнергия, к которой приводится: {item.EResult.Value:F2} млн кВт·ч", ref yPos);
+                }
+            }
+
+            // Для комбинированных прогнозов
+            if (item.TypeName.Contains("мощности и электроэнергии"))
+            {
+                if (item.POriginal.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Исходная мощность: {item.POriginal.Value:F2} МВт", ref yPos);
+                }
+                if (item.PResult.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Мощность, к которой приводится: {item.PResult.Value:F2} МВт", ref yPos);
+                }
+                if (item.EOriginal.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Исходная электроэнергия: {item.EOriginal.Value:F2} млн кВт·ч", ref yPos);
+                }
+                if (item.EResult.HasValue)
+                {
+                    AddDetailLabel(detailsPanel, $"Электроэнергия, к которой приводится: {item.EResult.Value:F2} млн кВт·ч", ref yPos);
+                }
+            }
+
+            // Для статических расчетов показываем периоды с регрессиями
+            if (item.IsStaticAnalysis && item.PeriodDetails != null && item.PeriodDetails.Count > 0)
+            {
+                AddDetailLabel(detailsPanel, "Результаты регрессий по периодам:", ref yPos);
+                yPos += 5; // Отступ
+
+                foreach (var period in item.PeriodDetails)
+                {
+                    AddDetailLabel(detailsPanel, $"• Период: {period.PeriodName} ({period.PeriodYear})", ref yPos);
+
+                    if (period.KLinear.HasValue)
+                        AddDetailLabel(detailsPanel, $"  Коэффициент наклона (k): {period.KLinear.Value:F4}", ref yPos);
+
+                    if (period.BLinear.HasValue)
+                        AddDetailLabel(detailsPanel, $"  Свободный член (b): {period.BLinear.Value:F2}", ref yPos);
+
+                    if (period.LExponential.HasValue)
+                        AddDetailLabel(detailsPanel, $"  Интенсивность (L): {period.LExponential.Value:F4}", ref yPos);
+
+                    yPos += 5; // Отступ между периодами
+                }
+            }
 
             detailsPanel.Height = yPos + 10;
             return detailsPanel;

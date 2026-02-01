@@ -48,14 +48,19 @@ namespace WindowsFormsApp1
         {
             try
             {
+                Cursor = Cursors.WaitCursor;
+
                 // Загружаем все данные из базы
                 _allHistoryItems = _databaseService.GetHistoryData();
 
                 // Применяем текущие фильтры
                 ApplyFilters();
+
+                Cursor = Cursors.Default;
             }
             catch (Exception ex)
             {
+                Cursor = Cursors.Default;
                 MessageBox.Show($"Ошибка загрузки данных: {ex.Message}", "Ошибка",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -103,7 +108,7 @@ namespace WindowsFormsApp1
         private void UpdateTitle()
         {
             int totalCount = _allHistoryItems.Count;
-            int filteredCount = panelHistory.Controls.Count; // количество отображенных элементов
+            int filteredCount = panelHistory.Controls.OfType<Panel>().Count(p => p.Tag is HistoryItem);
 
             if (totalCount == filteredCount)
             {
@@ -150,12 +155,12 @@ namespace WindowsFormsApp1
         private Panel CreateHistoryItemPanel(HistoryItem item, int yPosition)
         {
             // Определяем высоту панели в зависимости от типа
-            int panelHeight = 50; // базовая высота
+            int panelHeight = 60; // Увеличили высоту для кнопки удаления
 
             if (item.IsStaticAnalysis)
-                panelHeight = 70;
+                panelHeight = 80;
             else if (item.TypeName.Contains("и электроэнергии"))
-                panelHeight = 60;
+                panelHeight = 70;
 
             // Основная панель элемента
             var mainPanel = new Panel
@@ -169,6 +174,22 @@ namespace WindowsFormsApp1
                 Tag = item
             };
 
+            // Кнопка удаления
+            var deleteButton = new Button
+            {
+                Text = "✕",
+                Font = new Font("Microsoft Sans Serif", 10F, FontStyle.Bold),
+                Size = new Size(30, 30),
+                Location = new Point(mainPanel.Width - 80, 10),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Tag = new Tuple<Panel, HistoryItem>(mainPanel, item),
+                BackColor = Color.LightCoral,
+                ForeColor = Color.DarkRed,
+                FlatStyle = FlatStyle.Flat
+            };
+            deleteButton.Click += DeleteButton_Click;
+            mainPanel.Controls.Add(deleteButton);
+
             // Кнопка раскрытия
             var expandButton = new Button
             {
@@ -177,7 +198,9 @@ namespace WindowsFormsApp1
                 Size = new Size(30, 30),
                 Location = new Point(mainPanel.Width - 40, 10),
                 Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Tag = mainPanel
+                Tag = mainPanel,
+                BackColor = SystemColors.Control,
+                FlatStyle = FlatStyle.Flat
             };
             expandButton.Click += ExpandButton_Click;
             mainPanel.Controls.Add(expandButton);
@@ -188,7 +211,8 @@ namespace WindowsFormsApp1
                 Text = item.TypeName,
                 Font = new Font("Microsoft Sans Serif", 10F, FontStyle.Bold),
                 Location = new Point(10, 10),
-                AutoSize = true
+                AutoSize = true,
+                MaximumSize = new Size(mainPanel.Width - 100, 0)
             };
             mainPanel.Controls.Add(typeLabel);
 
@@ -213,15 +237,135 @@ namespace WindowsFormsApp1
                 };
                 mainPanel.Controls.Add(periodsLabel);
             }
+            else if (item.TargetDate.HasValue)
+            {
+                var targetLabel = new Label
+                {
+                    Text = $"Целевая дата: {item.TargetDate.Value:dd.MM.yyyy}",
+                    Font = new Font("Microsoft Sans Serif", 9F, FontStyle.Italic),
+                    Location = new Point(10, 50),
+                    AutoSize = true
+                };
+                mainPanel.Controls.Add(targetLabel);
+            }
 
             // Панель с деталями (скрыта по умолчанию)
             var detailsPanel = CreateDetailsPanel(item, mainPanel.Width);
-            detailsPanel.Location = new Point(10, mainPanel.Height - 10);
+            detailsPanel.Location = new Point(10, mainPanel.Height);
             mainPanel.Controls.Add(detailsPanel);
 
             _expandedPanels.Add(mainPanel, false);
 
             return mainPanel;
+        }
+
+        private void DeleteButton_Click(object sender, EventArgs e)
+        {
+            var button = sender as Button;
+            if (button == null || button.Tag == null) return;
+
+            var tuple = button.Tag as Tuple<Panel, HistoryItem>;
+            if (tuple == null) return;
+
+            var panel = tuple.Item1;
+            var item = tuple.Item2;
+
+            // Запрашиваем подтверждение
+            string message = $"Вы уверены, что хотите удалить этот расчет?\n\n" +
+                           $"Тип: {item.TypeName}\n" +
+                           $"Дата: {item.CalculationDate:dd.MM.yyyy HH:mm}";
+
+            if (item.TargetDate.HasValue)
+            {
+                message += $"\nЦелевая дата: {item.TargetDate.Value:dd.MM.yyyy}";
+            }
+
+            var result = MessageBox.Show(message, "Подтверждение удаления",
+                MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2);
+
+            if (result == DialogResult.Yes)
+            {
+                try
+                {
+                    Cursor = Cursors.WaitCursor;
+                    bool success = false;
+
+                    // Удаляем в зависимости от типа расчета
+                    if (item.IsStaticAnalysis && item.StaticId.HasValue)
+                    {
+                        success = _databaseService.DeleteStaticCalculation(item.StaticId.Value);
+                    }
+                    else if (item.ForecastId.HasValue)
+                    {
+                        success = _databaseService.DeleteForecastCalculation(item.ForecastId.Value);
+                    }
+                    else
+                    {
+                        // Попробуем найти ID по данным
+                        if (item.IsStaticAnalysis)
+                        {
+                            var staticId = _databaseService.GetStaticId(item.CalculationDate, item.CalculationName);
+                            if (staticId.HasValue)
+                                success = _databaseService.DeleteStaticCalculation(staticId.Value);
+                        }
+                        else
+                        {
+                            var forecastId = _databaseService.GetForecastId(
+                                item.CalculationDate,
+                                item.SystemName ?? "",
+                                item.CalculationName ?? "");
+                            if (forecastId.HasValue)
+                                success = _databaseService.DeleteForecastCalculation(forecastId.Value);
+                        }
+                    }
+
+                    Cursor = Cursors.Default;
+
+                    if (success)
+                    {
+                        // Удаляем панель из отображения
+                        panelHistory.Controls.Remove(panel);
+                        _expandedPanels.Remove(panel);
+
+                        // Удаляем запись из списка
+                        _allHistoryItems.Remove(item);
+
+                        // Обновляем позиции оставшихся элементов
+                        UpdateAllItemsPosition();
+
+                        // Обновляем заголовок
+                        UpdateTitle();
+
+                        MessageBox.Show("Расчет успешно удален", "Успех",
+                            MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    }
+                    else
+                    {
+                        MessageBox.Show("Не удалось удалить расчет", "Ошибка",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Cursor = Cursors.Default;
+                    MessageBox.Show($"Ошибка при удалении: {ex.Message}", "Ошибка",
+                        MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void UpdateAllItemsPosition()
+        {
+            int yPosition = 10;
+
+            foreach (Control control in panelHistory.Controls)
+            {
+                if (control is Panel panel && panel.Tag is HistoryItem)
+                {
+                    panel.Location = new Point(panel.Location.X, yPosition);
+                    yPosition += panel.Height + 10;
+                }
+            }
         }
 
         private Color GetItemColor(HistoryItem item)
@@ -364,14 +508,23 @@ namespace WindowsFormsApp1
                 bool isExpanded = _expandedPanels[mainPanel];
                 isExpanded = !isExpanded;
 
-                // Находим панель деталей (она всегда последняя в Controls)
+                // Находим панель деталей (предпоследний элемент, так как последний - это панель деталей)
                 var detailsPanel = mainPanel.Controls[mainPanel.Controls.Count - 1] as Panel;
 
                 if (detailsPanel != null)
                 {
                     button.Text = isExpanded ? "▲" : "▼";
                     detailsPanel.Visible = isExpanded;
-                    mainPanel.Height = isExpanded ? mainPanel.Height + detailsPanel.Height + 10 : mainPanel.Height - detailsPanel.Height;
+
+                    // Изменяем высоту основной панели
+                    if (isExpanded)
+                    {
+                        mainPanel.Height += detailsPanel.Height + 5;
+                    }
+                    else
+                    {
+                        mainPanel.Height -= detailsPanel.Height + 5;
+                    }
 
                     // Обновляем положение всех последующих элементов
                     UpdateItemsPosition(mainPanel);
@@ -397,7 +550,7 @@ namespace WindowsFormsApp1
             }
         }
 
-        // Обработчики фильтров
+        // Обработчики фильтров (без изменений)
         private void btnApplyFilters_Click(object sender, EventArgs e)
         {
             // Сохраняем выбранные фильтры

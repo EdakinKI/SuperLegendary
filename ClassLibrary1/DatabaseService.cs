@@ -382,6 +382,88 @@ namespace WindowsFormsApp1.Services
             }
         }
 
+        // Удаление расчета прогноза
+        public bool DeleteForecastCalculation(int forecastId)
+        {
+            try
+            {
+                var sql = @"DELETE FROM calculations_forecast WHERE forecast_id = @ForecastId";
+                int affectedRows = Execute(sql, new { ForecastId = forecastId });
+                return affectedRows > 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка удаления расчета прогноза: {ex.Message}");
+                return false;
+            }
+        }
+
+        // Удаление статического расчета (удалит и связанные периоды с регрессиями благодаря CASCADE)
+        public bool DeleteStaticCalculation(int staticId)
+        {
+            try
+            {
+                var sql = @"DELETE FROM calculations_static WHERE static_id = @StaticId";
+                int affectedRows = Execute(sql, new { StaticId = staticId });
+                return affectedRows > 0;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка удаления статического расчета: {ex.Message}");
+                return false;
+            }
+        }
+
+        // Получение ID расчета по данным (для идентификации)
+        public int? GetForecastId(DateTime calculationDate, string systemName, string calculationName)
+        {
+            try
+            {
+                var sql = @"
+            SELECT cf.forecast_id 
+            FROM calculations_forecast cf
+            JOIN energy_systems es ON cf.system_id = es.system_id
+            WHERE cf.calculation_date = @CalculationDate 
+            AND es.system_name = @SystemName 
+            AND cf.calculation_name = @CalculationName
+            LIMIT 1";
+
+                return ExecuteScalar<int?>(sql, new
+                {
+                    CalculationDate = calculationDate,
+                    SystemName = systemName,
+                    CalculationName = calculationName
+                });
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        public int? GetStaticId(DateTime calculationDate, string calculationName)
+        {
+            try
+            {
+                var sql = @"
+            SELECT static_id 
+            FROM calculations_static 
+            WHERE calculation_date = @CalculationDate 
+            AND calculation_name = @CalculationName
+            LIMIT 1";
+
+                return ExecuteScalar<int?>(sql, new
+                {
+                    CalculationDate = calculationDate,
+                    CalculationName = calculationName
+                });
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         public List<HistoryItem> GetHistoryData()
         {
             var historyItems = new List<HistoryItem>();
@@ -394,7 +476,8 @@ namespace WindowsFormsApp1.Services
 
                     // 1. Загружаем данные прогнозов
                     var forecastSql = @"
-                SELECT 
+                SELECT
+                    cf.forecast_id,
                     ct.type_name,
                     cf.calculation_date,
                     cf.target_date,
@@ -403,7 +486,8 @@ namespace WindowsFormsApp1.Services
                     cf.p_original,
                     cf.p_result,
                     cf.e_original,
-                    cf.e_result
+                    cf.e_result,
+                    es.system_name
                 FROM calculations_forecast cf
                 JOIN calculation_types ct ON cf.type_id = ct.type_id
                 WHERE ct.type_name IN (
@@ -419,11 +503,14 @@ namespace WindowsFormsApp1.Services
                     {
                         var historyItem = new HistoryItem
                         {
+                            ForecastId = item.forecast_id,
                             TypeName = item.type_name,
                             CalculationDate = item.calculation_date,
                             TargetDate = item.target_date,
                             TOriginal = item.t_original,
-                            TResult = item.t_result
+                            TResult = item.t_result,
+                            SystemName = item.system_name,
+                            CalculationName = item.calculation_name
                         };
 
                         // В зависимости от типа расчета добавляем соответствующие поля
